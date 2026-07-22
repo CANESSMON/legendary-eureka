@@ -52,22 +52,31 @@ const ClassifiedsGrid = ({
                 const rest = words.slice(highlightCount).join(' ');
                 
                 return (
-                  <div key={lIdx} className={`${paddingClass} ${textClass} border-b border-slate-200 last:border-b-0 hover:bg-slate-50 transition-colors group cursor-pointer relative`}>
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-black text-[12px] text-slate-900 leading-tight pr-2">{listing.title}</span>
-                      {listing.isUrgent && <span className="text-white bg-red-600 px-1 py-0.5 text-[9px] font-bold rounded-sm flex-shrink-0">Urgent</span>}
+                    <div 
+                      onClick={() => {
+                        const phone = (listing.whatsappNumber || '+919876543210').replace(/\D/g, '');
+                        const text = `Hi, I am interested in applying for ${listing.title} listed on JobPortal. Please share more details!`;
+                        window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                      className={`${paddingClass} ${textClass} border-b border-slate-200 last:border-b-0 hover:bg-indigo-50/50 transition-colors group cursor-pointer relative`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-black text-[12px] text-slate-900 leading-tight pr-2">{listing.title}</span>
+                        {listing.isUrgent && <span className="text-white bg-rose-600 px-1 py-0.5 text-[9px] font-bold rounded-sm flex-shrink-0 animate-pulse">URGENT</span>}
+                      </div>
+                      {listing.subCategory && (
+                        <p className="text-[9px] font-bold text-slate-500 tracking-wider mb-1">{listing.subCategory}</p>
+                      )}
+                      <p className="text-slate-800 text-justify">
+                        <span className="font-bold mr-1">{highlighted}</span>
+                        {rest}
+                      </p>
+                      <div className="mt-2 text-[10px] font-bold text-primary flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span>Apply Now &rarr;</span>
+                      </div>
                     </div>
-                    {listing.subCategory && (
-                      <p className="text-[9px] font-bold text-slate-500 tracking-wider mb-1">{listing.subCategory}</p>
-                    )}
-                    <p className="text-slate-800 text-justify">
-                      <span className="font-bold mr-1">{highlighted}</span>
-                      {rest}
-                    </p>
-                    <div className="mt-2 text-[10px] font-bold text-primary flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span>Apply Now &rarr;</span>
-                    </div>
-                  </div>
+
+
                 );
               })}
             </div>

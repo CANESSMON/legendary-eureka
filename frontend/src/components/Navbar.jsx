@@ -11,9 +11,13 @@ const Navbar = () => {
           <span>JobPortal</span>
         </Link>
         
-        <div className="hidden md:flex gap-8">
-          <Link to="/" className="transition-colors hover:text-primary text-slate-600">Jobs</Link>
-          <Link to="/about" className="transition-colors hover:text-primary text-slate-600">About</Link>
+        <div className="hidden md:flex gap-8 items-center font-medium text-sm">
+          <Link to="/jobs" className="transition-colors hover:text-primary text-slate-600 no-underline">Find Jobs</Link>
+          <Link to="/about" className="transition-colors hover:text-primary text-slate-600 no-underline">About</Link>
+          <Link to="/employer" className="transition-colors hover:text-primary text-indigo-600 font-bold flex items-center gap-1.5 no-underline bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+            <Briefcase size={15} className="text-primary" />
+            Employer Dashboard
+          </Link>
         </div>
 
         <div className="hidden md:flex items-center gap-4">
@@ -22,9 +26,10 @@ const Navbar = () => {
           </Link>
         </div>
         
-        <button className="md:hidden text-slate-900 bg-transparent">
+        <button className="md:hidden text-slate-900 bg-transparent border-0 cursor-pointer">
           <Menu />
         </button>
+
       </div>
     </nav>
   );

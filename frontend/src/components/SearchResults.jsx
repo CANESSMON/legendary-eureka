@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Building2, MapPin, IndianRupee, Clock, ChevronDown, FilterX, Check, Filter
+  Building2, MapPin, IndianRupee, Clock, ChevronDown, FilterX, Check, Filter, Flame, Zap, Phone
 } from 'lucide-react';
 import citiesData from '../data/cities.json';
 import ClassifiedsGrid from './ClassifiedsGrid';
-import { mockJobs } from '../data/mockJobs';
+import { useJobs } from '../context/JobContext';
+
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
@@ -13,6 +14,7 @@ const SearchResults = () => {
   const navigate = useNavigate();
 
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'classifieds'
+  const { jobs, trackWhatsAppApply } = useJobs();
 
   // Location Autocomplete state
   const [inputCity, setInputCity] = useState(city);
@@ -105,9 +107,10 @@ const SearchResults = () => {
   };
 
   const categories = ['IT', 'Healthcare', 'Marketing', 'Finance', 'Sales', 'Others'];
-  const jobTypes = ['Full-time', 'Contract', 'Remote', 'Internship'];
+  const activeJobsData = jobs.filter(j => j.status === 'Active');
 
-  const jobsData = mockJobs.map(job => ({
+
+  const jobsData = activeJobsData.map(job => ({
     ...job,
     location: job.location.toLowerCase().includes(city.toLowerCase()) || city === 'India' 
       ? job.location 
@@ -117,9 +120,10 @@ const SearchResults = () => {
   const filteredJobs = jobsData.filter(job => {
     if (appliedCategories.length > 0 && !appliedCategories.includes(job.category)) return false;
     if (appliedTypes.length > 0 && !appliedTypes.includes(job.type)) return false;
-    if (appliedSalary > 0 && job.minSalary < appliedSalary) return false;
+    if (appliedSalary > 0 && (job.minSalary || 0) < appliedSalary) return false;
     return true;
   });
+
 
   const toggleCategory = (cat) => {
     setCategoriesSelected(prev =>
@@ -364,17 +368,36 @@ const SearchResults = () => {
             viewMode === 'grid' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredJobs.map((job) => (
-                  <div key={job.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden h-full">
+                  <div key={job.id} className={`bg-white border rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden h-full ${
+                    job.isUrgent ? 'border-l-4 border-l-rose-500 border-slate-200 shadow-sm' : 'border-slate-200'
+                  }`}>
+                    {/* Top Badges Bar */}
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                      {job.isUrgent && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white uppercase tracking-wider animate-pulse shadow-sm">
+                          <Flame size={11} className="fill-white" />
+                          URGENT
+                        </span>
+                      )}
+                      {job.isFeatured && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white uppercase tracking-wider">
+                          <Zap size={11} className="fill-white" />
+                          FEATURED
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex justify-between items-start mb-4">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${job.iconBg} ${job.iconColor}`}>
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${job.iconBg || 'bg-indigo-50'} ${job.iconColor || 'text-indigo-600'}`}>
                         <Building2 size={24} />
                       </div>
-                      <span className="meta-text font-medium text-[11px] bg-slate-50 px-2 py-1 rounded border border-slate-100">{job.time}</span>
+                      <span className="meta-text font-medium text-[11px] bg-slate-50 px-2 py-1 rounded border border-slate-100">{job.postedDate || job.time || 'Recently'}</span>
                     </div>
 
                     <div className="mb-3">
-                      <h4 className="job-title group-hover:text-primary transition-colors mb-1 line-clamp-2 leading-tight">{job.title}</h4>
+                      <h4 className="job-title group-hover:text-primary transition-colors mb-1 line-clamp-2 leading-tight flex items-center justify-between">
+                        <span>{job.title}</span>
+                      </h4>
                       <p className="company-name tracking-wider line-clamp-1">{job.company}</p>
                     </div>
 
@@ -393,13 +416,17 @@ const SearchResults = () => {
                     </div>
 
                     <div className="mt-auto">
-                      <button className="bg-primary hover:bg-primary-hover text-white w-full py-2.5 rounded-lg transition-colors font-bold tracking-wide shadow-sm shadow-primary/20 text-sm">
+                      <button
+                        onClick={() => trackWhatsAppApply(job.id)}
+                        className="bg-primary hover:bg-primary-hover text-white w-full py-2.5 rounded-lg transition-colors font-bold tracking-wide shadow-sm shadow-primary/20 text-sm border-0 cursor-pointer"
+                      >
                         Apply Now
                       </button>
                     </div>
 
                   </div>
                 ))}
+
               </div>
             ) : viewMode === 'table' ? (
               <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
@@ -444,14 +471,19 @@ const SearchResults = () => {
                           </div>
                         </td>
                         <td className="p-4 text-center">
-                          <button className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-lg font-bold text-[10px] tracking-wider transition-colors shadow-sm">
-                            Apply
+                          <button
+                            onClick={() => trackWhatsAppApply(job.id)}
+                            className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-lg font-bold text-[10px] tracking-wider transition-colors shadow-sm border-0 cursor-pointer"
+                          >
+                            Apply Now
                           </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+
+
               </div>
             ) : (
               <ClassifiedsGrid listingsData={classifiedsData} columnsCount={4} density="high" />

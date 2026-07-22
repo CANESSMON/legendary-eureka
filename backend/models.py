@@ -45,3 +45,29 @@ class EmployerProfile(Base):
 
     user = relationship("User", back_populates="employer_profile")
     referred_by = relationship("AgentProfile", back_populates="referred_employers")
+
+class JobPosting(Base):
+    __tablename__ = "job_postings"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    title = Column(String, nullable=False, index=True)
+    company = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+    salary = Column(String, nullable=False)
+    min_salary = Column(String, nullable=True)
+    type = Column(String, default="Full-time")
+    category = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    requirements = Column(String, nullable=True)
+    is_urgent = Column(Boolean, default=False)
+    is_featured = Column(Boolean, default=False)
+    status = Column(String, default="Active")
+    views_count = Column(String, default="0")
+    applications_count = Column(String, default="0")
+    employer_id = Column(String, ForeignKey("employer_profiles.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    employer = relationship("EmployerProfile", back_populates="jobs")
+
+EmployerProfile.jobs = relationship("JobPosting", back_populates="employer")
+

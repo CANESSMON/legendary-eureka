@@ -84,3 +84,36 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     
     return {"access_token": "dummy-jwt-token-replace-with-pyjwt", "token_type": "bearer"}
+
+@app.get("/api/jobs", response_model=List[schemas.JobPostingResponse])
+def get_jobs(db: Session = Depends(get_db)):
+    return db.query(models.JobPosting).all()
+
+@app.post("/api/jobs", response_model=schemas.JobPostingResponse)
+def create_job(job: schemas.JobPostingCreate, db: Session = Depends(get_db)):
+    new_job = models.JobPosting(**job.dict())
+    db.add(new_job)
+    db.commit()
+    db.refresh(new_job)
+    return new_job
+
+@app.put("/api/jobs/{job_id}", response_model=schemas.JobPostingResponse)
+def update_job(job_id: str, job: schemas.JobPostingCreate, db: Session = Depends(get_db)):
+    db_job = db.query(models.JobPosting).filter(models.JobPosting.id == job_id).first()
+    if not db_job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    for key, value in job.dict().items():
+        setattr(db_job, key, value)
+    db.commit()
+    db.refresh(db_job)
+    return db_job
+
+@app.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str, db: Session = Depends(get_db)):
+    db_job = db.query(models.JobPosting).filter(models.JobPosting.id == job_id).first()
+    if not db_job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    db.delete(db_job)
+    db.commit()
+    return {"message": "Job deleted successfully"}
+
