@@ -76,7 +76,7 @@ const ApplicantsView = ({ jobFilter = null, onBack }) => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 tracking-wide">
                   <th className="py-4 px-6">Candidate</th>
                   <th className="py-4 px-6">Applied For</th>
                   <th className="py-4 px-6">Experience</th>

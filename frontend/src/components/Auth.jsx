@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Briefcase, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useJobs } from '../context/JobContext';
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { setEmployerProfile } = useJobs();
   const [isLogin, setIsLogin] = useState(true);
   const [accountType, setAccountType] = useState('employer');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -11,7 +13,10 @@ const Auth = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('referral') || '';
+  });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -55,7 +60,38 @@ const Auth = () => {
         }
         
         localStorage.setItem('token', data.access_token);
-        navigate('/');
+        if (data.user?.role) {
+          localStorage.setItem('userRole', data.user.role);
+        }
+        
+        if (data.user) {
+          const empProfile = data.user.employer_profile || {};
+          setEmployerProfile({
+            id: empProfile.id || '',
+            userId: data.user.id || '',
+            fullName: data.user.full_name || '',
+            companyName: empProfile.company_name || data.user.full_name || '',
+            industry: empProfile.industry || '',
+            logo: empProfile.logo || '',
+            establishmentYear: empProfile.establishment_year || '',
+            city: empProfile.city || '',
+            address: empProfile.address || '',
+            whatsappNumber: empProfile.whatsapp_number || '',
+            defaultMessage: empProfile.default_message || 'Hi, I saw your post for {title} on JobPortal. I am interested in applying and would like to connect!',
+            verified: empProfile.is_verified || false,
+            status: empProfile.status || 'Active',
+            suspension_reason: empProfile.suspension_reason || ''
+          });
+        }
+        
+        // Redirect employer to dashboard, agent to agent dashboard, others to home page
+        if (data.user?.role === 'EMPLOYER' || email.toLowerCase().includes('employer')) {
+          navigate('/employer');
+        } else if (data.user?.role === 'AGENT' || email.toLowerCase().includes('agent')) {
+          navigate('/agent');
+        } else {
+          navigate('/');
+        }
       } else {
         const payload = {
           email,

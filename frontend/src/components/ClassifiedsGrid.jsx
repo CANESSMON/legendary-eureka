@@ -62,7 +62,10 @@ const ClassifiedsGrid = ({
                     >
                       <div className="flex justify-between items-start mb-1">
                         <span className="font-black text-[12px] text-slate-900 leading-tight pr-2">{listing.title}</span>
-                        {listing.isUrgent && <span className="text-white bg-rose-600 px-1 py-0.5 text-[9px] font-bold rounded-sm flex-shrink-0 animate-pulse">URGENT</span>}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {listing.isUrgent && <span className="text-white bg-rose-600 px-1 py-0.5 text-[8px] font-black rounded-xs animate-pulse">URGENT</span>}
+                          {listing.isFeatured && <span className="text-white bg-amber-500 px-1 py-0.5 text-[8px] font-bold rounded-xs">FEATURED</span>}
+                        </div>
                       </div>
                       {listing.subCategory && (
                         <p className="text-[9px] font-bold text-slate-500 tracking-wider mb-1">{listing.subCategory}</p>

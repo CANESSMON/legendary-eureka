@@ -9,7 +9,6 @@ class RoleEnum(str, enum.Enum):
     SUPER_USER = 'SUPER_USER'
     EMPLOYER = 'EMPLOYER'
     AGENT = 'AGENT'
-    JOB_SEEKER = 'JOB_SEEKER'
 
 class User(Base):
     __tablename__ = "users"
@@ -18,7 +17,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     full_name = Column(String)
-    role = Column(Enum(RoleEnum), default=RoleEnum.JOB_SEEKER)
+    role = Column(Enum(RoleEnum), default=RoleEnum.EMPLOYER)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agent_profile = relationship("AgentProfile", back_populates="user", uselist=False)
@@ -30,6 +29,24 @@ class AgentProfile(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     user_id = Column(String, ForeignKey("users.id"))
     referral_code = Column(String, unique=True, index=True)
+    
+    # Personal Identity Details
+    phone = Column(String, nullable=True)
+    dob = Column(String, nullable=True)
+    profile_pic = Column(String, nullable=True)
+    
+    # Verification Document Details
+    doc_type = Column(String, nullable=True) # Aadhar, PAN, Voter ID, Passport
+    doc_number = Column(String, nullable=True)
+    
+    # Bank / Payout settings
+    payout_type = Column(String, nullable=True) # UPI or Bank
+    upi_id = Column(String, nullable=True)
+    bank_name = Column(String, nullable=True)
+    account_holder = Column(String, nullable=True)
+    account_number = Column(String, nullable=True)
+    ifsc_code = Column(String, nullable=True)
+    micr_code = Column(String, nullable=True)
 
     user = relationship("User", back_populates="agent_profile")
     referred_employers = relationship("EmployerProfile", back_populates="referred_by")
@@ -40,7 +57,15 @@ class EmployerProfile(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     user_id = Column(String, ForeignKey("users.id"))
     company_name = Column(String)
-    is_verified = Column(Boolean, default=False)
+    industry = Column(String, nullable=True, default="Information Technology")
+    city = Column(String, nullable=True, default="Bangalore")
+    whatsapp_number = Column(String, nullable=True, default="+919876543210")
+    logo = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    default_message = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=True)
+    status = Column(String, default="Active") # "Active" | "Suspended"
+    suspension_reason = Column(String, nullable=True)
     referred_by_id = Column(String, ForeignKey("agent_profiles.id"), nullable=True)
 
     user = relationship("User", back_populates="employer_profile")

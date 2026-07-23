@@ -36,10 +36,15 @@ const SearchResults = () => {
   // Custom dropdown visibility
   const [openDropdown, setOpenDropdown] = useState(null);
   const dropdownRef = useRef(null);
+  const sortRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(event.target) &&
+        (!sortRef.current || !sortRef.current.contains(event.target))
+      ) {
         setOpenDropdown(null);
       }
       if (locRef.current && !locRef.current.contains(event.target)) {
@@ -74,9 +79,6 @@ const SearchResults = () => {
     setInputCity(newCity);
     setShowSuggestions(false);
     setActiveIndex(-1);
-    if (newCity.trim() && newCity.trim() !== city) {
-      navigate(`/jobs?city=${encodeURIComponent(newCity.trim())}`);
-    }
   };
 
   const handleKeyDown = (e) => {
@@ -106,7 +108,49 @@ const SearchResults = () => {
     }
   };
 
-  const categories = ['IT', 'Healthcare', 'Marketing', 'Finance', 'Sales', 'Others'];
+  const categories = [
+    'Information Technology (IT)',
+    'Engineering',
+    'Healthcare',
+    'Education',
+    'Finance & Accounting',
+    'Sales',
+    'Marketing & Advertising',
+    'Human Resources (HR)',
+    'Customer Service',
+    'Operations',
+    'Manufacturing & Production',
+    'Construction & Real Estate',
+    'Legal',
+    'Government & Public Administration',
+    'Science & Research',
+    'Media & Communications',
+    'Design & Creative Arts',
+    'Hospitality & Tourism',
+    'Retail & E-commerce',
+    'Transportation & Logistics',
+    'Agriculture & Environmental',
+    'Energy & Utilities',
+    'Security & Law Enforcement',
+    'Skilled Trades',
+    'Consulting',
+    'Nonprofit & Social Services',
+    'Arts & Entertainment',
+    'Telecommunications',
+    'Biotechnology & Pharmaceuticals',
+    'Freelance & Gig Economy'
+  ];
+  const jobTypes = ['Full-time', 'Part-time', 'Remote', 'Contract', 'Internship'];
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+  const [sortBy, setSortBy] = useState('newest');
+
+  // Reset current page when the search city is changed
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [city]);
+
   const activeJobsData = jobs.filter(j => j.status === 'Active');
 
 
@@ -142,6 +186,13 @@ const SearchResults = () => {
     setAppliedTypes(typesSelected);
     setAppliedSalary(filterSalary);
     setOpenDropdown(null);
+    setCurrentPage(1);
+    
+    // Only navigate and apply city filter on Apply Filters button click
+    const targetCity = inputCity.trim() || 'India';
+    if (targetCity !== city) {
+      navigate(`/jobs?city=${encodeURIComponent(targetCity)}`);
+    }
   };
 
   const clearFilters = () => {
@@ -152,6 +203,8 @@ const SearchResults = () => {
     setAppliedTypes([]);
     setAppliedSalary(0);
     setOpenDropdown(null);
+    setCurrentPage(1);
+    setInputCity(city); // Reset the input field to current URL city filter
   };
 
   const hasActiveFilters = appliedCategories.length > 0 || appliedTypes.length > 0 || appliedSalary > 0;
@@ -162,22 +215,59 @@ const SearchResults = () => {
     !categoriesSelected.every(c => appliedCategories.includes(c)) ||
     typesSelected.length !== appliedTypes.length ||
     !typesSelected.every(t => appliedTypes.includes(t)) ||
-    filterSalary !== appliedSalary;
+    filterSalary !== appliedSalary ||
+    (inputCity.trim() || 'India').toLowerCase() !== city.toLowerCase();
 
-  const classifiedsData = filteredJobs.map(job => ({
+  const parseSalaryValue = (salaryStr) => {
+    if (!salaryStr) return 0;
+    const numbers = salaryStr.replace(/,/g, '').match(/\d+/g);
+    if (numbers && numbers.length > 0) {
+      return parseInt(numbers[0], 10);
+    }
+    return 0;
+  };
+
+  const sortedJobs = [...filteredJobs].sort((a, b) => {
+    if (sortBy === 'newest') {
+      const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+      const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+      return dateB - dateA;
+    }
+    if (sortBy === 'oldest') {
+      const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+      const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+      return dateA - dateB;
+    }
+    if (sortBy === 'salary_desc') {
+      return parseSalaryValue(b.salary) - parseSalaryValue(a.salary);
+    }
+    if (sortBy === 'salary_asc') {
+      return parseSalaryValue(a.salary) - parseSalaryValue(b.salary);
+    }
+    return 0;
+  });
+
+  const classifiedsData = sortedJobs.map(job => ({
     category: job.category,
     subCategory: job.company,
     title: job.title,
     content: `${job.salary} — ${job.location}. ${job.description}`,
-    isUrgent: job.id % 3 === 0,
+    isUrgent: job.isUrgent,
+    isFeatured: job.isFeatured,
+    whatsappNumber: job.whatsappNumber,
   }));
+
+  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedJobs = sortedJobs.slice(startIndex, endIndex);
 
   return (
     <div className="bg-slate-50 min-h-screen pt-24 pb-16 px-6">
       <div className="max-w-7xl mx-auto flex flex-col gap-6">
 
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 animate-fade-in">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 animate-fade-in relative z-30">
           <div>
             <h2 className="mb-1">Jobs in {city}</h2>
             <p className="body-text text-slate-500">Showing {filteredJobs.length} open roles</p>
@@ -206,11 +296,47 @@ const SearchResults = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 form-label">
+            <div ref={sortRef} className="flex items-center gap-2 form-label relative">
               <span className="text-slate-500">Sort by:</span>
-              <span className="font-semibold text-primary flex items-center gap-1 cursor-pointer">
-                Newest First <ChevronDown size={16} />
-              </span>
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(openDropdown === 'sort' ? null : 'sort')}
+                className="font-bold text-primary bg-transparent border-0 flex items-center gap-1 cursor-pointer outline-none hover:text-primary-hover transition-colors"
+              >
+                {sortBy === 'newest' && 'Newest First'}
+                {sortBy === 'oldest' && 'Oldest First'}
+                {sortBy === 'salary_desc' && 'Salary: High to Low'}
+                {sortBy === 'salary_asc' && 'Salary: Low to High'}
+                <ChevronDown size={16} className={`transition-transform ${openDropdown === 'sort' ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {openDropdown === 'sort' && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 shadow-xl rounded-xl p-1.5 z-30 animate-fade-in">
+                  {[
+                    { id: 'newest', label: 'Newest First' },
+                    { id: 'oldest', label: 'Oldest First' },
+                    { id: 'salary_desc', label: 'Salary: High to Low' },
+                    { id: 'salary_asc', label: 'Salary: Low to High' }
+                  ].map(option => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => {
+                        setSortBy(option.id);
+                        setOpenDropdown(null);
+                        setCurrentPage(1); // Reset page on sort change
+                      }}
+                      className={`w-full text-left px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border-0 ${
+                        sortBy === option.id 
+                          ? 'bg-indigo-50 text-primary' 
+                          : 'bg-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -260,7 +386,7 @@ const SearchResults = () => {
               <ChevronDown size={16} className={`transition-transform ${openDropdown === 'category' ? 'rotate-180' : ''}`} />
             </button>
             {openDropdown === 'category' && (
-              <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 shadow-xl rounded-xl p-2 z-30 animate-fade-in">
+              <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 shadow-xl rounded-xl p-2 z-30 animate-fade-in max-h-[220px] overflow-y-auto">
                 {categories.map(cat => (
                   <div
                     key={cat}
@@ -367,7 +493,7 @@ const SearchResults = () => {
           {filteredJobs.length > 0 ? (
             viewMode === 'grid' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredJobs.map((job) => (
+                {paginatedJobs.map((job) => (
                   <div key={job.id} className={`bg-white border rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden h-full ${
                     job.isUrgent ? 'border-l-4 border-l-rose-500 border-slate-200 shadow-sm' : 'border-slate-200'
                   }`}>
@@ -443,11 +569,23 @@ const SearchResults = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredJobs.map(job => (
+                    {paginatedJobs.map(job => (
                       <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="p-4">
-                          <div className="font-bold text-slate-900 mb-0.5">{job.title}</div>
-                          <div className="text-[10px] text-slate-500 font-medium tracking-wider">{job.time}</div>
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                            <span className="font-bold text-slate-900">{job.title}</span>
+                            {job.isUrgent && (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-600 text-white uppercase tracking-wider animate-pulse">
+                                URGENT
+                              </span>
+                            )}
+                            {job.isFeatured && (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-white uppercase tracking-wider">
+                                FEATURED
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium tracking-wider">{job.postedDate || job.time || 'Recently'}</div>
                         </td>
                         <td className="p-4">
                           <span className="font-medium text-xs text-slate-700 tracking-wider">{job.company}</span>
@@ -499,11 +637,52 @@ const SearchResults = () => {
             </div>
           )}
 
-          {filteredJobs.length > 0 && (
-            <div className="mt-8 text-center">
-              <span className="px-8 py-3 border-2 border-primary text-primary rounded-lg hover:bg-primary hover:text-white transition-colors inline-block cursor-pointer form-label font-bold tracking-wider">
-                Load More Listings
+          {viewMode !== 'classifieds' && totalPages > 1 && (
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-fade-in">
+              <span className="text-xs font-semibold text-slate-500">
+                Showing <span className="text-slate-800">{Math.min(startIndex + 1, filteredJobs.length)}</span> to <span className="text-slate-800">{Math.min(endIndex, filteredJobs.length)}</span> of <span className="text-slate-800">{filteredJobs.length}</span> jobs
               </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => {
+                  if (totalPages > 5) {
+                    if (pageNum !== 1 && pageNum !== totalPages && Math.abs(pageNum - currentPage) > 1) {
+                      if (pageNum === 2 && currentPage > 3) return <span key={pageNum} className="text-slate-400 text-xs px-1">...</span>;
+                      if (pageNum === totalPages - 1 && currentPage < totalPages - 2) return <span key={pageNum} className="text-slate-400 text-xs px-1">...</span>;
+                      return null;
+                    }
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        currentPage === pageNum
+                          ? 'bg-primary text-white shadow-sm'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
 
