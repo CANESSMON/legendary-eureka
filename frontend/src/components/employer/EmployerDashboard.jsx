@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useJobs } from '../../context/JobContext';
 import EmployerAnalytics from './EmployerAnalytics';
 import ManagePostings from './ManagePostings';
 import JobPostForm from './JobPostForm';
 import CompanyProfile from './CompanyProfile';
 import EmployerPlans from './EmployerPlans';
-import { 
-  LayoutDashboard, Briefcase, PlusCircle, 
+import {
+  LayoutDashboard, Briefcase, PlusCircle,
   UserCheck, ChevronRight, ExternalLink, Menu, X,
   CreditCard, LogOut, AlertTriangle
 } from 'lucide-react';
@@ -17,9 +17,17 @@ const EmployerDashboard = () => {
   const [editingJob, setEditingJob] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const { employerProfile, getEmployerJobs } = useJobs();
+  const { employerProfile, getEmployerJobs, token, userRole, logout } = useJobs();
   const employerJobs = getEmployerJobs();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/auth');
+    } else if (userRole !== 'EMPLOYER') {
+      navigate(userRole === 'AGENT' ? '/agent' : '/');
+    }
+  }, [token, userRole, navigate]);
 
   // Completion calculation for popup warning prompt
   const profileFields = [
@@ -56,6 +64,10 @@ const EmployerDashboard = () => {
   };
 
   const handleCreateNew = () => {
+    if (!employerProfile.verified || employerProfile.status === 'Suspended') {
+      alert("You must be verified and have an active account to post jobs. Please contact support or wait for admin approval.");
+      return;
+    }
     setEditingJob(null);
     setActiveTab('create');
     setMobileMenuOpen(false);
@@ -84,7 +96,7 @@ const EmployerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50/70 text-slate-900 flex flex-col md:flex-row">
-      
+
       {/* Mobile Top Header */}
       <div className="md:hidden bg-[#f0f3ff] text-slate-900 px-4 py-3 flex items-center justify-between shrink-0 shadow-xs border-b border-indigo-100/80">
         <div className="flex items-center gap-3">
@@ -99,9 +111,9 @@ const EmployerDashboard = () => {
             <h4 className="font-bold text-xs text-slate-900 truncate max-w-[160px]">
               {employerProfile.companyName}
             </h4>
-            <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Verified Employer
+            <span className={`text-[10px] font-semibold flex items-center gap-1 ${employerProfile.verified ? 'text-emerald-600' : 'text-amber-600'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${employerProfile.verified ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+              {employerProfile.verified ? 'Verified Employer' : 'Pending Verification'}
             </span>
           </div>
         </div>
@@ -145,9 +157,9 @@ const EmployerDashboard = () => {
                 <h4 className="font-bold text-xs text-slate-900 truncate">
                   {employerProfile.companyName}
                 </h4>
-                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Verified Business
+                <span className={`text-[10px] font-semibold flex items-center gap-1 mt-0.5 ${employerProfile.verified ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${employerProfile.verified ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  {employerProfile.verified ? 'Verified Business' : 'Pending Verification'}
                 </span>
               </div>
             </div>
@@ -161,11 +173,10 @@ const EmployerDashboard = () => {
               <button
                 type="button"
                 onClick={() => handleTabChange('analytics')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${
-                  activeTab === 'analytics'
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${activeTab === 'analytics'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   <LayoutDashboard size={16} />
@@ -177,11 +188,10 @@ const EmployerDashboard = () => {
               <button
                 type="button"
                 onClick={() => handleTabChange('postings')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${
-                  activeTab === 'postings'
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${activeTab === 'postings'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Briefcase size={16} />
@@ -193,11 +203,10 @@ const EmployerDashboard = () => {
               <button
                 type="button"
                 onClick={handleCreateNew}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${
-                  activeTab === 'create'
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${activeTab === 'create'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   <PlusCircle size={16} />
@@ -209,11 +218,10 @@ const EmployerDashboard = () => {
               <button
                 type="button"
                 onClick={() => handleTabChange('plans')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${
-                  activeTab === 'plans'
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${activeTab === 'plans'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   <CreditCard size={16} />
@@ -225,11 +233,10 @@ const EmployerDashboard = () => {
               <button
                 type="button"
                 onClick={() => handleTabChange('profile')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${
-                  activeTab === 'profile'
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border-0 cursor-pointer ${activeTab === 'profile'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   <UserCheck size={16} />
@@ -248,7 +255,9 @@ const EmployerDashboard = () => {
               <span className="text-emerald-600 flex items-center gap-1 text-[10px]">● Active</span>
             </div>
             <p className="text-[10px] leading-relaxed text-slate-500">
-              {employerJobs.length} Job Postings • Direct WhatsApp candidate redirection enabled
+              {employerJobs.length} Job Postings
+              <br />
+              • Direct WhatsApp candidate redirection enabled
             </p>
           </div>
 
@@ -283,7 +292,7 @@ const EmployerDashboard = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-        
+
         {/* Top Header Navbar */}
         <header className="hidden md:flex h-14 bg-white border-b border-slate-200/90 px-6 items-center justify-between shadow-2xs">
           {/* Breadcrumbs */}
@@ -297,7 +306,7 @@ const EmployerDashboard = () => {
         {/* Dynamic View Container */}
         <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
-            
+
             {employerProfile.status === 'Suspended' && (
               <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex items-start gap-3 font-semibold text-xs animate-fade-in shadow-2xs">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 animate-pulse" />
@@ -305,6 +314,30 @@ const EmployerDashboard = () => {
                   <h4 className="font-extrabold text-rose-950 text-sm">Account Moderated / Suspended</h4>
                   <p className="text-rose-850 font-medium">
                     This business workspace has been suspended by your affiliate partner agent. Reason: <strong>{employerProfile.suspension_reason || 'Terms of Service violation'}</strong>. Please connect with your referral manager for resolution.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {!employerProfile.verified && employerProfile.status !== 'Suspended' && (
+              <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex items-start gap-3 font-semibold text-xs animate-fade-in shadow-2xs">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-amber-950 text-sm">Pending Admin Verification</h4>
+                  <p className="text-amber-850 font-medium">
+                    Your account is currently awaiting verification from our Super Admin. You will not be able to post new jobs until your business is verified.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {employerJobs.filter(j => j.status === 'Suspended').length > 0 && activeTab !== 'postings' && (
+              <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex items-start gap-3 font-semibold text-xs animate-fade-in shadow-2xs">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-amber-950 text-sm">Job Listings Suspended by Moderation</h4>
+                  <p className="text-amber-850 font-medium">
+                    You have <strong>{employerJobs.filter(j => j.status === 'Suspended').length}</strong> job listing(s) suspended by administration. Please go to your <button onClick={() => setActiveTab('postings')} className="underline font-bold text-amber-950 bg-transparent border-0 cursor-pointer p-0">My Job Postings</button> tab to view the reasons and submit an appeal.
                   </p>
                 </div>
               </div>
@@ -353,7 +386,7 @@ const EmployerDashboard = () => {
             <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mx-auto border border-amber-100">
               <UserCheck size={22} />
             </div>
-            
+
             <div className="space-y-1">
               <h3 className="text-base font-extrabold text-slate-900">Complete Your Profile</h3>
               <p className="text-xs text-slate-500 font-medium leading-relaxed px-2">
@@ -368,8 +401,8 @@ const EmployerDashboard = () => {
                 <span>{completionPercentage}%</span>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
-                <div 
-                  className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                <div
+                  className="bg-amber-500 h-full rounded-full transition-all duration-500"
                   style={{ width: `${completionPercentage}%` }}
                 ></div>
               </div>
@@ -403,7 +436,7 @@ const EmployerDashboard = () => {
             <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <LogOut size={22} className="ml-0.5" />
             </div>
-            
+
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-slate-900">Confirm Log Out</h3>
               <p className="text-xs text-slate-500 font-medium leading-relaxed px-2">
@@ -423,9 +456,8 @@ const EmployerDashboard = () => {
                 type="button"
                 onClick={() => {
                   sessionStorage.removeItem('profile_prompt_dismissed');
-                  localStorage.removeItem('token');
-                  localStorage.removeItem('userRole');
-                  window.location.href = '/';
+                  logout();
+                  navigate('/');
                 }}
                 className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 border-0 rounded-xl cursor-pointer transition-all shadow-md shadow-rose-600/20"
               >

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { mockJobs } from '../data/mockJobs';
+import { API_BASE_URL } from '../config';
 
 // Controlled via .env → VITE_USE_MOCK_DATA=true|false
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
@@ -8,11 +9,13 @@ const JobContext = createContext();
 
 export const JobProvider = ({ children }) => {
   const [jobs, setJobs] = useState([]);
+  const [token, setToken] = useState(() => localStorage.getItem('token') || null);
+  const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || null);
 
   const [employerProfile, setEmployerProfile] = useState(() => {
     const saved = localStorage.getItem('jobportal_employer_profile');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch (e) { }
     }
     return {
       id: '',
@@ -33,86 +36,205 @@ export const JobProvider = ({ children }) => {
   // Helper to parse number from salary string
   const parseSalaryValue = (salaryStr) => {
     if (!salaryStr) return 0;
-    const numbers = salaryStr.replace(/,/g, '').match(/\d+/g);
-    if (numbers && numbers.length > 0) {
-      return parseInt(numbers[0], 10);
+    const cleanStr = salaryStr.toLowerCase().replace(/,/g, '');
+
+    // 1. Check for Lakh / L suffix (e.g. 12L or 12 Lakh)
+    const lakhMatch = cleanStr.match(/(\d+(?:\.\d+)?)\s*(?:l|lakh|lac)/);
+    if (lakhMatch) {
+      const val = parseFloat(lakhMatch[1]) * 100000;
+      if (cleanStr.includes('month') || cleanStr.includes('/mo') || cleanStr.includes('pm')) {
+        return val * 12;
+      }
+      return val;
+    }
+
+    // 2. Otherwise extract the first number sequence
+    const numberMatch = cleanStr.match(/\d+/);
+    if (numberMatch) {
+      let val = parseInt(numberMatch[0], 10);
+      if (cleanStr.includes('month') || cleanStr.includes('/mo') || cleanStr.includes('pm') || cleanStr.includes('internship') || cleanStr.includes('stipend')) {
+        if (val < 150000) {
+          return val * 12;
+        }
+      }
+      return val;
     }
     return 0;
   };
 
-  // Load jobs from API or mock
-  useEffect(() => {
-    const loadJobs = async () => {
-      if (USE_MOCK_DATA) {
-        const saved = localStorage.getItem('jobportal_jobs');
-        if (saved) {
-          try {
-            setJobs(JSON.parse(saved));
-            return;
-          } catch (e) {}
-        }
-        
-        const initialMock = mockJobs.map((job, index) => ({
-          ...job,
-          isUrgent: job.isUrgent ?? (index % 4 === 0),
-          isFeatured: job.isFeatured ?? (index % 5 === 1),
-          status: job.status || 'Active',
-          views: job.views || Math.floor(Math.random() * 450) + 50,
-          applicantsCount: job.applicantsCount || Math.floor(Math.random() * 35) + 3,
-          applyClicks: job.applyClicks || Math.floor(Math.random() * 40) + 10,
-          whatsappNumber: job.whatsappNumber || '+919876543210',
-          whatsappMessage: job.whatsappMessage || `Hi, I am interested in applying for ${job.title} at ${job.company} posted on JobPortal. Please share more details!`,
-          postedDate: job.time || 'Recently',
-          createdAt: new Date(Date.now() - index * 12 * 60 * 60 * 1000).toISOString(),
-          minSalary: job.minSalary || parseSalaryValue(job.salary),
-          requirements: job.requirements || 'Key Skills: Communication, Problem Solving, Domain Expertise',
-          applicants: job.applicants || []
+  const login = (newToken, newRole, newProfile) => {
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('userRole', newRole);
+    setToken(newToken);
+    setUserRole(newRole);
+    if (newRole === 'EMPLOYER' && newProfile) {
+      const empProfile = newProfile.employer_profile || {};
+      const formattedProfile = {
+        id: empProfile.id || '',
+        userId: newProfile.id || '',
+        fullName: newProfile.full_name || '',
+        companyName: empProfile.company_name || newProfile.full_name || '',
+        industry: empProfile.industry || '',
+        logo: empProfile.logo || '',
+        establishmentYear: empProfile.establishment_year || '',
+        city: empProfile.city || '',
+        address: empProfile.address || '',
+        whatsappNumber: empProfile.whatsapp_number || '',
+        defaultMessage: empProfile.default_message || 'Hi, I saw your post for {title} on JobPortal. I am interested in applying and would like to connect!',
+        verified: empProfile.is_verified || false,
+        status: empProfile.status || 'Active',
+        suspension_reason: empProfile.suspension_reason || '',
+        subscription_plan: empProfile.subscription_plan || 'Free',
+        subscription_status: empProfile.subscription_status || 'Active'
+      };
+      setEmployerProfile(formattedProfile);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('jobportal_employer_profile');
+    setToken(null);
+    setUserRole(null);
+    setEmployerProfile({
+      id: '',
+      userId: '',
+      fullName: '',
+      companyName: '',
+      industry: '',
+      logo: '',
+      establishmentYear: '',
+      city: '',
+      address: '',
+      whatsappNumber: '',
+      defaultMessage: 'Hi, I saw your post for {title} on JobPortal. I am interested in applying and would like to connect!',
+      verified: false
+    });
+  };
+
+  const refreshEmployerProfile = async () => {
+    if (!token || userRole !== 'EMPLOYER') return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/employer/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const empProfile = await response.json();
+        setEmployerProfile(prev => ({
+          ...prev,
+          id: empProfile.id || prev.id,
+          companyName: empProfile.company_name || prev.companyName,
+          industry: empProfile.industry || prev.industry,
+          logo: empProfile.logo || prev.logo,
+          city: empProfile.city || prev.city,
+          address: empProfile.address || prev.address,
+          whatsappNumber: empProfile.whatsapp_number || prev.whatsappNumber,
+          verified: empProfile.is_verified,
+          status: empProfile.status || prev.status,
+          suspension_reason: empProfile.suspension_reason || prev.suspension_reason,
+          subscription_plan: empProfile.subscription_plan || prev.subscription_plan,
+          subscription_status: empProfile.subscription_status || prev.subscription_status
         }));
-        setJobs(initialMock);
-        return;
+      }
+    } catch (err) {
+      console.error('Error refreshing employer profile:', err);
+    }
+  };
+
+  const loadJobs = async () => {
+    if (USE_MOCK_DATA) {
+      const saved = localStorage.getItem('jobportal_jobs');
+      if (saved) {
+        try {
+          setJobs(JSON.parse(saved));
+          return;
+        } catch (e) { }
       }
 
-      try {
-        const response = await fetch('http://localhost:8000/api/jobs');
-        if (response.ok) {
-          const data = await response.json();
-          const mappedJobs = data.map((job) => {
-            const formattedDate = job.created_at 
-              ? new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-              : 'Recently';
-            return {
-              id: job.id,
-              title: job.title,
-              company: job.company,
-              location: job.location,
-              salary: job.salary,
-              type: job.type || 'Full-time',
-              category: job.category,
-              description: job.description || '',
-              requirements: job.requirements || 'Key Skills: Communication, Problem Solving, Domain Expertise',
-              isUrgent: job.is_urgent,
-              isFeatured: job.is_featured,
-              status: job.status || 'Active',
-              views: parseInt(job.views_count) || 0,
-              applicantsCount: parseInt(job.applications_count) || 0,
-              applyClicks: parseInt(job.applications_count) || 0,
-              whatsappNumber: job.whatsappNumber || '+919876543210',
-              whatsappMessage: `Hi, I am interested in applying for ${job.title} at ${job.company} posted on JobPortal. Please share more details!`,
-              postedDate: formattedDate,
-              createdAt: job.created_at || new Date(0).toISOString(),
-              minSalary: job.min_salary ? parseInt(job.min_salary) : parseSalaryValue(job.salary),
-              applicants: []
-            };
-          });
-          setJobs(mappedJobs);
-        }
-      } catch (err) {
-        console.error('Error fetching jobs from API:', err);
-      }
-    };
+      const initialMock = mockJobs.map((job, index) => ({
+        ...job,
+        isUrgent: job.isUrgent ?? (index % 4 === 0),
+        isFeatured: job.isFeatured ?? (index % 5 === 1),
+        status: job.status || 'Active',
+        views: job.views || Math.floor(Math.random() * 450) + 50,
+        applicantsCount: job.applicantsCount || Math.floor(Math.random() * 35) + 3,
+        applyClicks: job.applyClicks || Math.floor(Math.random() * 40) + 10,
+        whatsappNumber: job.whatsappNumber || '+919876543210',
+        whatsappMessage: job.whatsappMessage || `Hi, I am interested in applying for ${job.title} at ${job.company} posted on JobPortal. Please share more details!`,
+        postedDate: job.time || 'Recently',
+        createdAt: new Date(Date.now() - index * 12 * 60 * 60 * 1000).toISOString(),
+        minSalary: job.minSalary || parseSalaryValue(job.salary),
+        requirements: job.requirements || 'Key Skills: Communication, Problem Solving, Domain Expertise',
+        applicants: job.applicants || []
+      }));
+      initialMock.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setJobs(initialMock);
+      return;
+    }
 
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/jobs`);
+      if (response.ok) {
+        const data = await response.json();
+        const mappedJobs = data.map((job) => {
+          const formattedDate = job.created_at
+            ? new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'Recently';
+          return {
+            id: job.id,
+            reference_number: job.reference_number,
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            salary: job.salary,
+            type: job.type || 'Full-time',
+            category: job.category,
+            description: job.description || '',
+            requirements: job.requirements || 'Key Skills: Communication, Problem Solving, Domain Expertise',
+            isUrgent: job.is_urgent,
+            isFeatured: job.is_featured,
+            status: job.status || 'Active',
+            views: job.views_count || 0,
+            applicantsCount: job.applications_count || 0,
+            applyClicks: job.applications_count || 0,
+            whatsappNumber: job.whatsapp_number || '+919876543210',
+            whatsappMessage: `Hi, I am interested in applying for ${job.title} at ${job.company} posted on JobPortal. Please share more details!`,
+            postedDate: formattedDate,
+            createdAt: job.created_at || new Date(0).toISOString(),
+            salary_min: job.salary_min,
+            salary_max: job.salary_max,
+            salary_period: job.salary_period || 'year',
+            minSalary: job.salary_min ? (job.salary_period === 'month' ? job.salary_min * 12 : job.salary_min * 100000) : (job.min_salary ? parseInt(job.min_salary) : parseSalaryValue(job.salary)),
+            applicants: [],
+            employerId: job.employer_id,
+            moderationReason: job.moderation_reason,
+            appealText: job.appeal_text,
+            appealStatus: job.appeal_status,
+            classified_heading: job.classified_heading
+          };
+        });
+        mappedJobs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setJobs(mappedJobs);
+      }
+    } catch (err) {
+      console.error('Error fetching jobs from API:', err);
+    }
+  };
+
+  // Initial load & background polling
+  useEffect(() => {
     loadJobs();
-  }, []);
+    refreshEmployerProfile();
+    fetchPlans();
+
+    const interval = setInterval(() => {
+      loadJobs();
+      refreshEmployerProfile();
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [token, userRole]);
 
   // Save to localStorage on change ONLY when in mock mode
   useEffect(() => {
@@ -149,12 +271,23 @@ export const JobProvider = ({ children }) => {
       return newJob;
     }
 
+    let salaryString = newJobData.salary || '';
+    if (newJobData.salary_min && newJobData.salary_max) {
+      if (newJobData.salary_period === 'month') {
+        const formattedMin = parseInt(newJobData.salary_min).toLocaleString('en-IN');
+        const formattedMax = parseInt(newJobData.salary_max).toLocaleString('en-IN');
+        salaryString = `₹${formattedMin} - ₹${formattedMax} PM`;
+      } else {
+        salaryString = `₹${newJobData.salary_min}L - ₹${newJobData.salary_max}L PA`;
+      }
+    }
+
     const payload = {
       title: newJobData.title,
       company: newJobData.company || employerProfile.companyName,
       location: newJobData.location || employerProfile.city || 'Bangalore',
-      salary: newJobData.salary,
-      min_salary: newJobData.minSalary?.toString() || null,
+      salary: salaryString,
+      min_salary: newJobData.salary_min ? (newJobData.salary_period === 'month' ? (parseInt(newJobData.salary_min) * 12).toString() : (parseInt(newJobData.salary_min) * 100000).toString()) : (newJobData.minSalary?.toString() || null),
       type: newJobData.type || 'Full-time',
       category: newJobData.category,
       description: newJobData.description || '',
@@ -162,19 +295,27 @@ export const JobProvider = ({ children }) => {
       is_urgent: newJobData.isUrgent || false,
       is_featured: newJobData.isFeatured || false,
       employer_id: employerProfile.id || null,
-      status: 'Active'
+      status: 'Active',
+      classified_heading: newJobData.classified_heading || null,
+      salary_min: newJobData.salary_min ? parseInt(newJobData.salary_min) : null,
+      salary_max: newJobData.salary_max ? parseInt(newJobData.salary_max) : null,
+      salary_period: newJobData.salary_period || 'year'
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/jobs', {
+      const response = await fetch(`${API_BASE_URL}/api/jobs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
       if (response.ok) {
         const job = await response.json();
         const mappedJob = {
           id: job.id,
+          reference_number: job.reference_number,
           title: job.title,
           company: job.company,
           location: job.location,
@@ -186,20 +327,29 @@ export const JobProvider = ({ children }) => {
           isUrgent: job.is_urgent,
           isFeatured: job.is_featured,
           status: job.status || 'Active',
-          views: parseInt(job.views_count) || 0,
-          applicantsCount: parseInt(job.applications_count) || 0,
-          applyClicks: parseInt(job.applications_count) || 0,
+          views: job.views_count || 0,
+          applicantsCount: job.applications_count || 0,
+          applyClicks: job.applications_count || 0,
           whatsappNumber: newJobData.whatsappNumber || employerProfile.whatsappNumber || '+919876543210',
           whatsappMessage: newJobData.whatsappMessage || `Hi, I am interested in applying for ${job.title} at ${job.company} posted on JobPortal. Please share more details!`,
           postedDate: 'Just now',
           createdAt: job.created_at || new Date().toISOString(),
-          applicants: []
+          applicants: [],
+          classified_heading: job.classified_heading,
+          salary_min: job.salary_min,
+          salary_max: job.salary_max,
+          salary_period: job.salary_period || 'year',
+          minSalary: job.salary_min ? (job.salary_period === 'month' ? job.salary_min * 12 : job.salary_min * 100000) : parseSalaryValue(job.salary)
         };
         setJobs((prevJobs) => [mappedJob, ...prevJobs]);
         return mappedJob;
+      } else {
+        const errData = await response.json();
+        throw new Error(errData.detail || 'Failed to create job posting.');
       }
     } catch (err) {
       console.error('Error adding job to API:', err);
+      throw err;
     }
   };
 
@@ -211,12 +361,23 @@ export const JobProvider = ({ children }) => {
       return;
     }
 
+    let salaryString = updatedData.salary || '';
+    if (updatedData.salary_min && updatedData.salary_max) {
+      if (updatedData.salary_period === 'month') {
+        const formattedMin = parseInt(updatedData.salary_min).toLocaleString('en-IN');
+        const formattedMax = parseInt(updatedData.salary_max).toLocaleString('en-IN');
+        salaryString = `₹${formattedMin} - ₹${formattedMax} PM`;
+      } else {
+        salaryString = `₹${updatedData.salary_min}L - ₹${updatedData.salary_max}L PA`;
+      }
+    }
+
     const payload = {
       title: updatedData.title,
       company: updatedData.company || employerProfile.companyName,
       location: updatedData.location || employerProfile.city || 'Bangalore',
-      salary: updatedData.salary,
-      min_salary: updatedData.minSalary?.toString() || null,
+      salary: salaryString,
+      min_salary: updatedData.salary_min ? (updatedData.salary_period === 'month' ? (parseInt(updatedData.salary_min) * 12).toString() : (parseInt(updatedData.salary_min) * 100000).toString()) : (updatedData.minSalary?.toString() || null),
       type: updatedData.type || 'Full-time',
       category: updatedData.category,
       description: updatedData.description || '',
@@ -224,13 +385,20 @@ export const JobProvider = ({ children }) => {
       is_urgent: updatedData.isUrgent || false,
       is_featured: updatedData.isFeatured || false,
       employer_id: employerProfile.id || null,
-      status: updatedData.status || 'Active'
+      status: updatedData.status || 'Active',
+      classified_heading: updatedData.classified_heading || null,
+      salary_min: updatedData.salary_min ? parseInt(updatedData.salary_min) : null,
+      salary_max: updatedData.salary_max ? parseInt(updatedData.salary_max) : null,
+      salary_period: updatedData.salary_period || 'year'
     };
 
     try {
-      const response = await fetch(`http://localhost:8000/api/jobs/${jobId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
       if (response.ok) {
@@ -239,21 +407,27 @@ export const JobProvider = ({ children }) => {
           prevJobs.map((j) =>
             j.id === jobId
               ? {
-                  ...j,
-                  title: job.title,
-                  company: job.company,
-                  location: job.location,
-                  salary: job.salary,
-                  type: job.type,
-                  category: job.category,
-                  description: job.description || '',
-                  requirements: job.requirements || 'Key Skills: Communication, Problem Solving, Domain Expertise',
-                  isUrgent: job.is_urgent,
-                  isFeatured: job.is_featured,
-                  status: job.status || 'Active',
-                  whatsappNumber: updatedData.whatsappNumber || j.whatsappNumber,
-                  whatsappMessage: updatedData.whatsappMessage || j.whatsappMessage
-                }
+                ...j,
+                reference_number: job.reference_number,
+                title: job.title,
+                company: job.company,
+                location: job.location,
+                salary: job.salary,
+                type: job.type,
+                category: job.category,
+                description: job.description || '',
+                requirements: job.requirements || 'Key Skills: Communication, Problem Solving, Domain Expertise',
+                isUrgent: job.is_urgent,
+                isFeatured: job.is_featured,
+                status: job.status || 'Active',
+                whatsappNumber: updatedData.whatsappNumber || j.whatsappNumber,
+                whatsappMessage: updatedData.whatsappMessage || j.whatsappMessage,
+                classified_heading: job.classified_heading,
+                salary_min: job.salary_min,
+                salary_max: job.salary_max,
+                salary_period: job.salary_period,
+                minSalary: job.salary_min ? (job.salary_period === 'month' ? job.salary_min * 12 : job.salary_min * 100000) : parseSalaryValue(job.salary)
+              }
               : j
           )
         );
@@ -265,20 +439,176 @@ export const JobProvider = ({ children }) => {
 
   const deleteJob = async (jobId) => {
     if (USE_MOCK_DATA) {
-      setJobs((prevJobs) => prevJobs.filter((j) => j.id !== jobId));
-      return;
+      setJobs((prevJobs) =>
+        prevJobs.map((j) => (j.id === jobId ? { ...j, status: 'Deleted' } : j))
+      );
+      return true;
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/jobs/${jobId}`, {
-        method: 'DELETE'
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       if (response.ok) {
-        setJobs((prevJobs) => prevJobs.filter((j) => j.id !== jobId));
+        setJobs((prevJobs) =>
+          prevJobs.map((j) => (j.id === jobId ? { ...j, status: 'Deleted' } : j))
+        );
+        return true;
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        console.error('Failed to delete job:', response.status, errData);
+        alert(`Failed to delete job: ${errData.detail || response.statusText || 'Server Error'}`);
+        return false;
       }
     } catch (err) {
       console.error('Error deleting job via API:', err);
+      alert(`Error deleting job: ${err.message || err}`);
+      return false;
     }
+  };
+
+  const suspendJob = async (jobId, reason) => {
+    if (USE_MOCK_DATA) {
+      setJobs((prevJobs) =>
+        prevJobs.map((j) =>
+          j.id === jobId
+            ? {
+              ...j,
+              status: 'Suspended',
+              moderationReason: reason,
+              appealStatus: null,
+              appealText: null
+            }
+            : j
+        )
+      );
+      return true;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/suspend`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason })
+      });
+      if (response.ok) {
+        const job = await response.json();
+        setJobs((prevJobs) =>
+          prevJobs.map((j) =>
+            j.id === jobId
+              ? {
+                ...j,
+                status: job.status,
+                moderationReason: job.moderation_reason,
+                appealStatus: job.appeal_status,
+                appealText: job.appeal_text
+              }
+              : j
+          )
+        );
+        return true;
+      }
+    } catch (err) {
+      console.error('Error suspending job via API:', err);
+    }
+    return false;
+  };
+
+  const submitAppeal = async (jobId, appealText) => {
+    if (USE_MOCK_DATA) {
+      setJobs((prevJobs) =>
+        prevJobs.map((j) =>
+          j.id === jobId
+            ? {
+              ...j,
+              appealStatus: 'Pending',
+              appealText: appealText
+            }
+            : j
+        )
+      );
+      return true;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/appeal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ appeal_text: appealText })
+      });
+      if (response.ok) {
+        const job = await response.json();
+        setJobs((prevJobs) =>
+          prevJobs.map((j) =>
+            j.id === jobId
+              ? {
+                ...j,
+                appealStatus: job.appeal_status,
+                appealText: job.appeal_text
+              }
+              : j
+          )
+        );
+        return true;
+      }
+    } catch (err) {
+      console.error('Error submitting appeal via API:', err);
+    }
+    return false;
+  };
+
+  const restoreJob = async (jobId) => {
+    if (USE_MOCK_DATA) {
+      setJobs((prevJobs) =>
+        prevJobs.map((j) =>
+          j.id === jobId
+            ? {
+              ...j,
+              status: 'Active',
+              moderationReason: null,
+              appealStatus: null,
+              appealText: null
+            }
+            : j
+        )
+      );
+      return true;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/restore`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const job = await response.json();
+        setJobs((prevJobs) =>
+          prevJobs.map((j) =>
+            j.id === jobId
+              ? {
+                ...j,
+                status: job.status,
+                moderationReason: job.moderation_reason,
+                appealStatus: job.appeal_status,
+                appealText: job.appeal_text
+              }
+              : j
+          )
+        );
+        return true;
+      }
+    } catch (err) {
+      console.error('Error restoring job via API:', err);
+    }
+    return false;
   };
 
   const toggleJobStatus = async (jobId) => {
@@ -315,9 +645,12 @@ export const JobProvider = ({ children }) => {
     };
 
     try {
-      await fetch(`http://localhost:8000/api/jobs/${jobId}`, {
+      await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
     } catch (err) {
@@ -359,9 +692,12 @@ export const JobProvider = ({ children }) => {
     };
 
     try {
-      await fetch(`http://localhost:8000/api/jobs/${jobId}`, {
+      await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
     } catch (err) {
@@ -403,9 +739,12 @@ export const JobProvider = ({ children }) => {
     };
 
     try {
-      await fetch(`http://localhost:8000/api/jobs/${jobId}`, {
+      await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
     } catch (err) {
@@ -427,32 +766,9 @@ export const JobProvider = ({ children }) => {
 
     if (USE_MOCK_DATA) return;
 
-    const job = jobs.find((j) => j.id === jobId);
-    if (!job) return;
-
-    const payload = {
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      salary: job.salary,
-      min_salary: job.minSalary?.toString() || null,
-      type: job.type || 'Full-time',
-      category: job.category,
-      description: job.description || '',
-      requirements: job.requirements || '',
-      is_urgent: job.isUrgent,
-      is_featured: job.isFeatured,
-      employer_id: job.employer_id || employerProfile.id || null,
-      status: job.status || 'Active',
-      views_count: nextViews.toString(),
-      applications_count: job.applicantsCount?.toString() || '0'
-    };
-
     try {
-      await fetch(`http://localhost:8000/api/jobs/${jobId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      await fetch(`${API_BASE_URL}/api/jobs/${jobId}/view`, {
+        method: 'POST'
       });
     } catch (err) {
       console.error('Error incrementing job views via API:', err);
@@ -487,7 +803,7 @@ export const JobProvider = ({ children }) => {
   // Direct WhatsApp contact apply click handler
   const trackWhatsAppApply = (jobId, candidateName = 'Job Seeker') => {
     let whatsappUrl = '#';
-    
+
     setJobs((prevJobs) =>
       prevJobs.map((j) => {
         if (j.id === jobId) {
@@ -520,10 +836,44 @@ export const JobProvider = ({ children }) => {
     if (whatsappUrl !== '#') {
       window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
     }
+
+    if (!USE_MOCK_DATA) {
+      fetch(`${API_BASE_URL}/api/jobs/${jobId}/apply`, {
+        method: 'POST'
+      }).catch((err) => console.error('Error tracking apply via API:', err));
+    }
   };
 
-  const updateEmployerProfile = (updatedProfile) => {
+  const updateEmployerProfile = async (updatedProfile) => {
     setEmployerProfile((prev) => ({ ...prev, ...updatedProfile }));
+
+    if (USE_MOCK_DATA) return true;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/employer/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedProfile)
+      });
+      if (response.ok) {
+        const responseData = await response.json();
+        setJobs(prevJobs =>
+          prevJobs.map(j => {
+            if (j.employerId === responseData.id || j.company.toLowerCase() === responseData.company_name.toLowerCase()) {
+              return { ...j, whatsappNumber: responseData.whatsapp_number };
+            }
+            return j;
+          })
+        );
+        return true;
+      }
+    } catch (err) {
+      console.error('Error saving employer profile to API:', err);
+    }
+    return false;
   };
 
 
@@ -552,10 +902,164 @@ export const JobProvider = ({ children }) => {
     };
   };
 
+  // Admin and Category Actions
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/categories/public`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+    return [];
+  };
+
+  const addCategory = async (name) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/categories`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name })
+      });
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.error('Error adding category:', err);
+    }
+  };
+
+  const deleteCategory = async (categoryId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/categories/${categoryId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      return response;
+    } catch (err) {
+      console.error('Error deleting category:', err);
+      return null;
+    }
+  };
+
+  const fetchAdminStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.error('Error fetching admin stats:', err);
+    }
+  };
+
+  const fetchActivityLogs = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/logs`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.error('Error fetching activity logs:', err);
+    }
+  };
+
+  const fetchAdminEmployers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/employers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.error('Error fetching admin employers:', err);
+    }
+  };
+
+  const verifyEmployer = async (employerId) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/admin/employers/${employerId}/verify`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error('Error verifying employer:', err);
+    }
+  };
+
+  const updateEmployerSubscription = async (employerId, plan, status) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/admin/employers/${employerId}/subscription`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ subscription_plan: plan, subscription_status: status })
+      });
+    } catch (err) {
+      console.error('Error updating subscription:', err);
+    }
+  };
+
+  const fetchAdminAgents = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/agents`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.error('Error fetching admin agents:', err);
+    }
+  };
+
+  const [plans, setPlans] = useState([]);
+
+  const fetchPlans = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/plans/public`);
+      if (response.ok) {
+        const data = await response.json();
+        setPlans(data);
+        return data;
+      }
+    } catch (err) {
+      console.error('Error fetching plans:', err);
+    }
+    return [];
+  };
+
+  const updatePlan = async (planId, updatedPlanData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/plans/${planId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedPlanData)
+      });
+      if (response.ok) {
+        fetchPlans();
+        return true;
+      }
+    } catch (err) {
+      console.error('Error updating plan:', err);
+    }
+    return false;
+  };
+
   return (
     <JobContext.Provider
       value={{
         jobs,
+        token,
+        userRole,
+        login,
+        logout,
         employerProfile,
         setEmployerProfile,
         updateEmployerProfile,
@@ -568,7 +1072,22 @@ export const JobProvider = ({ children }) => {
         incrementJobViews,
         trackWhatsAppApply,
         getEmployerJobs,
-        getAnalytics
+        getAnalytics,
+        fetchCategories,
+        addCategory,
+        deleteCategory,
+        fetchAdminStats,
+        fetchAdminEmployers,
+        verifyEmployer,
+        updateEmployerSubscription,
+        fetchAdminAgents,
+        plans,
+        fetchPlans,
+        updatePlan,
+        suspendJob,
+        submitAppeal,
+        restoreJob,
+        fetchActivityLogs
       }}
     >
       {children}

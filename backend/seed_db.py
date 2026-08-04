@@ -4,7 +4,7 @@ Run directly:   python seed_db.py
 Called by:       reset_db.py  (drop → create → seed)
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 
 from sqlalchemy.orm import Session
@@ -40,7 +40,7 @@ def seed():
         password_hash=get_password_hash(ADMIN["password"]),
         full_name=ADMIN["full_name"],
         role=models.RoleEnum.SUPER_USER,
-        created_at=datetime.utcnow() - timedelta(days=90),
+        created_at=datetime.now(timezone.utc) - timedelta(days=90),
     )
     db.add(admin_user)
     db.flush()
@@ -54,7 +54,7 @@ def seed():
             password_hash=get_password_hash(agent_data["password"]),
             full_name=agent_data["full_name"],
             role=models.RoleEnum.AGENT,
-            created_at=datetime.utcnow() - timedelta(days=60 - i * 10),
+            created_at=datetime.now(timezone.utc) - timedelta(days=60 - i * 10),
         )
         db.add(agent_user)
         db.flush()
@@ -90,7 +90,7 @@ def seed():
             password_hash=get_password_hash(emp_data["password"]),
             full_name=emp_data["full_name"],
             role=models.RoleEnum.EMPLOYER,
-            created_at=datetime.utcnow() - timedelta(days=days_ago),
+            created_at=datetime.now(timezone.utc) - timedelta(days=days_ago),
         )
         db.add(emp_user)
         db.flush()
@@ -122,8 +122,8 @@ def seed():
         for j, job in enumerate(jobs):
             # Stagger created_at so listings aren't all on the same date
             days_offset = random.randint(1, 30)
-            views = str(random.randint(20, 500))
-            applications = str(random.randint(2, 80))
+            views = random.randint(20, 500)
+            applications = random.randint(2, 80)
 
             posting = models.JobPosting(
                 title=job["title"],
@@ -140,10 +140,37 @@ def seed():
                 views_count=views,
                 applications_count=applications,
                 employer_id=emp_profile.id,
-                created_at=datetime.utcnow() - timedelta(days=days_offset),
+                created_at=datetime.now(timezone.utc) - timedelta(days=days_offset),
             )
             db.add(posting)
             total_jobs += 1
+
+    # ── 5. Categories ────────────────────────────────────────────────────────
+    categories_set = set([
+        "Information Technology (IT)",
+        "Freelance & Gig Economy",
+        "Design & Creative Arts",
+        "Healthcare Tech",
+        "Supply Chain & Logistics",
+        "E-Learning",
+        "Renewable Resources",
+        "Cybersecurity",
+        "Aerospace Engineering",
+        "Pharmaceuticals",
+        "Sales & Marketing",
+        "Finance & Accounting",
+        "Human Resources",
+        "Content Writing"
+    ])
+    for jobs_list in JOB_POSTINGS.values():
+        for job in jobs_list:
+            if "category" in job:
+                categories_set.add(job["category"])
+
+    for cat_name in categories_set:
+        existing = db.query(models.JobCategory).filter(models.JobCategory.name == cat_name).first()
+        if not existing:
+            db.add(models.JobCategory(name=cat_name))
 
     db.commit()
 

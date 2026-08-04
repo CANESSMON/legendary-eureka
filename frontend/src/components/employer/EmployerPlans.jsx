@@ -3,8 +3,9 @@ import {
   CreditCard, Check, Sparkles, Zap, ShieldCheck, 
   Building2, CheckCircle2, Flame, Users, ArrowRight
 } from 'lucide-react';
+import { useJobs } from '../../context/JobContext';
 
-const PLANS = [
+const FALLBACK_PLANS = [
   {
     id: 'starter',
     name: 'Starter Business',
@@ -70,11 +71,65 @@ const PLANS = [
 const EmployerPlans = () => {
   const [selectedBilling, setSelectedBilling] = useState('monthly'); // 'monthly' | 'annual'
   const [successMessage, setSuccessMessage] = useState('');
+  const { employerProfile, plans } = useJobs();
+
+  const isCurrentPlan = (planId) => {
+    const current = (employerProfile?.subscription_plan || 'Free').toLowerCase();
+    if (planId === 'starter') return current === 'free';
+    if (planId === 'pro') return current === 'basic' || current === 'pro';
+    if (planId === 'enterprise') return current === 'premium' || current === 'enterprise';
+    return false;
+  };
+
+  const displayedPlans = plans && plans.length > 0 ? plans.map((p) => {
+    const featureList = p.features ? p.features.split('\n').filter(f => f.trim().length > 0) : [];
+    const designMap = {
+      starter: {
+        badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
+        buttonText: 'Current Active Plan',
+        buttonStyle: 'bg-slate-100 text-slate-600 border border-slate-200 cursor-default',
+        isPopular: false
+      },
+      pro: {
+        badgeColor: 'bg-primary/10 text-primary border-primary/20',
+        buttonText: 'Upgrade to Pro',
+        buttonStyle: 'bg-primary hover:bg-primary-hover text-white shadow-md shadow-primary/25 cursor-pointer',
+        isPopular: true
+      },
+      enterprise: {
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        buttonText: 'Contact Support to Upgrade',
+        buttonStyle: 'bg-slate-900 hover:bg-slate-800 text-white shadow-md cursor-pointer',
+        isPopular: false
+      }
+    };
+    const design = designMap[p.id] || {
+      badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
+      buttonText: 'Subscribe',
+      buttonStyle: 'bg-primary hover:bg-primary-hover text-white cursor-pointer',
+      isPopular: false
+    };
+
+    const isCurrent = isCurrentPlan(p.id);
+
+    return {
+      id: p.id,
+      name: p.name,
+      tagline: p.tagline,
+      price: p.price,
+      period: p.period || 'per month',
+      features: featureList,
+      ...design,
+      isCurrent,
+      buttonText: isCurrent ? 'Current Active Plan' : design.buttonText,
+      buttonStyle: isCurrent ? 'bg-slate-100 text-slate-600 border border-slate-200 cursor-default' : design.buttonStyle
+    };
+  }) : FALLBACK_PLANS;
 
   const handleSelectPlan = (plan) => {
     if (plan.isCurrent) return;
-    setSuccessMessage(`Subscribed to ${plan.name} successfully! Your plan privileges are now active.`);
-    setTimeout(() => setSuccessMessage(''), 4000);
+    setSuccessMessage(`Plan choice noted! Please request your Administrator to update your plan to ${plan.name} via the Admin subscription dropdown.`);
+    setTimeout(() => setSuccessMessage(''), 6000);
   };
 
   return (
@@ -127,7 +182,7 @@ const EmployerPlans = () => {
 
       {/* Pricing Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {PLANS.map((plan) => (
+        {displayedPlans.map((plan) => (
           <div
             key={plan.id}
             className={`bg-white rounded-2xl border transition-all p-6 flex flex-col justify-between relative shadow-2xs hover:shadow-md ${

@@ -1,23 +1,42 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Building2, MapPin, IndianRupee, Clock, ChevronDown, FilterX, Check, Filter, Flame, Zap, Phone
+  Building2, MapPin, IndianRupee, Clock, ChevronDown, FilterX, Check, Filter, Flame, Zap, Phone, Calendar
 } from 'lucide-react';
 import citiesData from '../data/cities.json';
 import ClassifiedsGrid from './ClassifiedsGrid';
 import { useJobs } from '../context/JobContext';
+import { API_BASE_URL } from '../config';
 
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
-  const city = searchParams.get('city') || 'India';
+  const locationParam = searchParams.get('location') || searchParams.get('city') || 'India';
   const navigate = useNavigate();
 
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'classifieds'
+  const [viewMode, setViewMode] = useState('classifieds'); // 'classifieds', 'grid', or 'table'
   const { jobs, trackWhatsAppApply } = useJobs();
 
+  const [resolvedLocation, setResolvedLocation] = useState(null);
+
+  // Fetch resolved location details (like area/city/state name) when location param changes
+  useEffect(() => {
+    if (locationParam && locationParam !== 'India') {
+      fetch(`${API_BASE_URL}/api/locations/resolve?q=${encodeURIComponent(locationParam)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.display) {
+            setResolvedLocation(data);
+          }
+        })
+        .catch(err => console.error('Error resolving location:', err));
+    } else {
+      setResolvedLocation(null);
+    }
+  }, [locationParam]);
+
   // Location Autocomplete state
-  const [inputCity, setInputCity] = useState(city);
+  const [inputCity, setInputCity] = useState(locationParam);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -55,34 +74,57 @@ const SearchResults = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [isTyping, setIsTyping] = useState(false);
+
   useEffect(() => {
-    setInputCity(city);
-  }, [city]);
+    setInputCity(locationParam);
+    setIsTyping(false);
+  }, [locationParam]);
+
+  // Fetch suggestions when inputCity changes while typing
+  useEffect(() => {
+    const q = inputCity.trim();
+    if (!isTyping || q.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      fetch(`${API_BASE_URL}/api/locations/suggest?q=${encodeURIComponent(q)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setSuggestions(data);
+            setShowSuggestions(data.length > 0);
+          }
+        })
+        .catch(err => console.error('Error fetching suggestions:', err));
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [inputCity, isTyping]);
 
   const handleCityChange = (e) => {
     const value = e.target.value;
     setInputCity(value);
-    if (value.trim().length > 0) {
-      const filtered = citiesData.filter(c =>
-        c.toLowerCase().startsWith(value.toLowerCase())
-      ).slice(0, 8);
-      setSuggestions(filtered);
-      setShowSuggestions(true);
-      setActiveIndex(-1);
-    } else {
+    setIsTyping(true);
+    if (value.trim().length < 2) {
       setShowSuggestions(false);
       setActiveIndex(-1);
     }
   };
 
-  const submitCityChange = (newCity) => {
-    setInputCity(newCity);
+  const submitCityChange = (newCityValue) => {
+    setInputCity(newCityValue);
+    setIsTyping(false);
     setShowSuggestions(false);
     setActiveIndex(-1);
+    navigate(`/jobs?location=${encodeURIComponent(newCityValue.trim() || 'India')}`);
   };
 
   const handleKeyDown = (e) => {
-    if (!showSuggestions) {
+    if (!showSuggestions || suggestions.length === 0) {
       if (e.key === 'Enter') {
         submitCityChange(inputCity);
       }
@@ -98,7 +140,7 @@ const SearchResults = () => {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (activeIndex >= 0) {
-        submitCityChange(suggestions[activeIndex]);
+        submitCityChange(suggestions[activeIndex].value);
       } else {
         submitCityChange(inputCity);
       }
@@ -109,6 +151,7 @@ const SearchResults = () => {
   };
 
   const categories = [
+    'All Jobs',
     'Information Technology (IT)',
     'Engineering',
     'Healthcare',
@@ -140,29 +183,44 @@ const SearchResults = () => {
     'Biotechnology & Pharmaceuticals',
     'Freelance & Gig Economy'
   ];
-  const jobTypes = ['Full-time', 'Part-time', 'Remote', 'Contract', 'Internship'];
+  const jobTypes = ['Full-time', 'Part-time', 'Remote', 'Work from home', 'Contract', 'Internship'];
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = viewMode === 'classifieds' ? 12 : 8;
   const [sortBy, setSortBy] = useState('newest');
 
-  // Reset current page when the search city is changed
+  // Reset current page when the search location is changed
   useEffect(() => {
     setCurrentPage(1);
-  }, [city]);
+  }, [locationParam]);
+
+  // Reset current page when the view mode is changed
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [viewMode]);
 
   const activeJobsData = jobs.filter(j => j.status === 'Active');
 
+  const filteredJobs = activeJobsData.filter(job => {
+    // 1. Location filtering
+    if (locationParam && locationParam.toLowerCase() !== 'india') {
+      if (resolvedLocation && resolvedLocation.search_terms && resolvedLocation.search_terms.length > 0) {
+        const matches = resolvedLocation.search_terms.some(term => 
+          job.location.toLowerCase().includes(term.toLowerCase())
+        );
+        if (!matches) return false;
+      } else {
+        // Fallback to simple matching if API response hasn't loaded yet or is empty
+        const queryTerms = locationParam.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const matches = queryTerms.every(term => 
+          job.location.toLowerCase().includes(term)
+        );
+        if (!matches) return false;
+      }
+    }
 
-  const jobsData = activeJobsData.map(job => ({
-    ...job,
-    location: job.location.toLowerCase().includes(city.toLowerCase()) || city === 'India' 
-      ? job.location 
-      : `${job.location}, ${city}`
-  }));
-
-  const filteredJobs = jobsData.filter(job => {
-    if (appliedCategories.length > 0 && !appliedCategories.includes(job.category)) return false;
+    // 2. Category, Type, Salary filtering
+    if (appliedCategories.length > 0 && !appliedCategories.includes('All Jobs') && !appliedCategories.includes(job.category)) return false;
     if (appliedTypes.length > 0 && !appliedTypes.includes(job.type)) return false;
     if (appliedSalary > 0 && (job.minSalary || 0) < appliedSalary) return false;
     return true;
@@ -170,9 +228,16 @@ const SearchResults = () => {
 
 
   const toggleCategory = (cat) => {
-    setCategoriesSelected(prev =>
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-    );
+    if (cat === 'All Jobs') {
+      setCategoriesSelected(prev =>
+        prev.includes('All Jobs') ? [] : ['All Jobs']
+      );
+    } else {
+      setCategoriesSelected(prev => {
+        const filtered = prev.filter(c => c !== 'All Jobs');
+        return filtered.includes(cat) ? filtered.filter(c => c !== cat) : [...filtered, cat];
+      });
+    }
   };
 
   const toggleType = (type) => {
@@ -190,8 +255,8 @@ const SearchResults = () => {
     
     // Only navigate and apply city filter on Apply Filters button click
     const targetCity = inputCity.trim() || 'India';
-    if (targetCity !== city) {
-      navigate(`/jobs?city=${encodeURIComponent(targetCity)}`);
+    if (targetCity !== locationParam) {
+      navigate(`/jobs?location=${encodeURIComponent(targetCity)}`);
     }
   };
 
@@ -204,7 +269,7 @@ const SearchResults = () => {
     setAppliedSalary(0);
     setOpenDropdown(null);
     setCurrentPage(1);
-    setInputCity(city); // Reset the input field to current URL city filter
+    setInputCity(locationParam); // Reset the input field to current URL location filter
   };
 
   const hasActiveFilters = appliedCategories.length > 0 || appliedTypes.length > 0 || appliedSalary > 0;
@@ -216,13 +281,32 @@ const SearchResults = () => {
     typesSelected.length !== appliedTypes.length ||
     !typesSelected.every(t => appliedTypes.includes(t)) ||
     filterSalary !== appliedSalary ||
-    (inputCity.trim() || 'India').toLowerCase() !== city.toLowerCase();
+    (inputCity.trim() || 'India').toLowerCase() !== locationParam.toLowerCase();
 
   const parseSalaryValue = (salaryStr) => {
     if (!salaryStr) return 0;
-    const numbers = salaryStr.replace(/,/g, '').match(/\d+/g);
-    if (numbers && numbers.length > 0) {
-      return parseInt(numbers[0], 10);
+    const cleanStr = salaryStr.toLowerCase().replace(/,/g, '');
+    
+    // 1. Check for Lakh / L suffix (e.g. 12L or 12 Lakh)
+    const lakhMatch = cleanStr.match(/(\d+(?:\.\d+)?)\s*(?:l|lakh|lac)/);
+    if (lakhMatch) {
+      const val = parseFloat(lakhMatch[1]) * 100000;
+      if (cleanStr.includes('month') || cleanStr.includes('/mo') || cleanStr.includes('pm')) {
+        return val * 12;
+      }
+      return val;
+    }
+    
+    // 2. Otherwise extract the first number sequence
+    const numberMatch = cleanStr.match(/\d+/);
+    if (numberMatch) {
+      let val = parseInt(numberMatch[0], 10);
+      if (cleanStr.includes('month') || cleanStr.includes('/mo') || cleanStr.includes('pm') || cleanStr.includes('internship') || cleanStr.includes('stipend')) {
+        if (val < 150000) {
+          return val * 12;
+        }
+      }
+      return val;
     }
     return 0;
   };
@@ -247,7 +331,12 @@ const SearchResults = () => {
     return 0;
   });
 
-  const classifiedsData = sortedJobs.map(job => ({
+  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedJobs = sortedJobs.slice(startIndex, endIndex);
+
+  const classifiedsData = paginatedJobs.map(job => ({
     category: job.category,
     subCategory: job.company,
     title: job.title,
@@ -255,12 +344,10 @@ const SearchResults = () => {
     isUrgent: job.isUrgent,
     isFeatured: job.isFeatured,
     whatsappNumber: job.whatsappNumber,
+    reference_number: job.reference_number,
+    postedDate: job.postedDate || 'Recently',
+    classified_heading: job.classified_heading,
   }));
-
-  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedJobs = sortedJobs.slice(startIndex, endIndex);
 
   return (
     <div className="bg-slate-50 min-h-screen pt-24 pb-16 px-6">
@@ -269,7 +356,7 @@ const SearchResults = () => {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 animate-fade-in relative z-30">
           <div>
-            <h2 className="mb-1">Jobs in {city}</h2>
+            <h2 className="mb-1">Jobs in {resolvedLocation ? resolvedLocation.display : locationParam}</h2>
             <p className="body-text text-slate-500">Showing {filteredJobs.length} open roles</p>
           </div>
           
@@ -277,23 +364,23 @@ const SearchResults = () => {
             {/* View Toggle */}
             <div className="bg-white border border-slate-200 rounded-lg p-1 flex items-center shadow-sm">
               <button 
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-md transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                Cards
-              </button>
-              <button 
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-md transition-colors ${viewMode === 'table' ? 'bg-primary text-white shadow' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                Table
-              </button>
-              <button 
                 onClick={() => setViewMode('classifieds')}
                 className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-md transition-colors ${viewMode === 'classifieds' ? 'bg-primary text-white shadow' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 Classifieds
               </button>
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-md transition-colors ${viewMode === 'grid' ? 'bg-primary text-white shadow' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Cards
+              </button>
+              {/* <button 
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-md transition-colors ${viewMode === 'table' ? 'bg-primary text-white shadow' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Table
+              </button> */}
             </div>
 
             <div ref={sortRef} className="flex items-center gap-2 form-label relative">
@@ -354,22 +441,22 @@ const SearchResults = () => {
                 onChange={handleCityChange}
                 onKeyDown={handleKeyDown}
                 onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                placeholder="Search city..."
-                className="bg-transparent border-none outline-none w-24 sm:w-32 focus:w-40 transition-all text-slate-900 placeholder:text-slate-400"
+                placeholder="Search area, city or pincode..."
+                className="bg-transparent border-none outline-none w-48 focus:w-56 transition-all text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 overflow-hidden animate-fade-in">
+              <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-30 overflow-hidden animate-fade-in max-h-72 overflow-y-auto">
                 {suggestions.map((suggestion, index) => (
                   <div
                     key={index}
-                    onClick={() => submitCityChange(suggestion)}
+                    onClick={() => submitCityChange(suggestion.value)}
                     onMouseEnter={() => setActiveIndex(index)}
                     className={`px-4 py-2.5 cursor-pointer flex items-center gap-3 transition-colors ${index === activeIndex ? 'bg-slate-100 text-primary' : 'hover:bg-slate-50 text-slate-700'}`}
                   >
                     <MapPin size={14} className={index === activeIndex ? 'text-primary' : 'text-slate-400'} />
-                    <span className="form-label">{suggestion}</span>
+                    <span className="text-xs font-semibold">{suggestion.display}</span>
                   </div>
                 ))}
               </div>
@@ -430,37 +517,7 @@ const SearchResults = () => {
             )}
           </div>
 
-          {/* Salary Custom Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setOpenDropdown(openDropdown === 'salary' ? null : 'salary')}
-              className={`flex items-center gap-2 bg-white border rounded-full px-4 py-2 form-label transition-colors shadow-sm ${openDropdown === 'salary' || filterSalary > 0 ? 'border-primary text-primary' : 'border-slate-200 text-slate-700 hover:border-slate-300'}`}
-            >
-              Min Salary {filterSalary > 0 && `(₹${filterSalary}L+)`}
-              <ChevronDown size={16} className={`transition-transform ${openDropdown === 'salary' ? 'rotate-180' : ''}`} />
-            </button>
-            {openDropdown === 'salary' && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-5 z-30 animate-fade-in">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="form-label text-slate-500">Minimum Expected</span>
-                  <span className="form-label font-bold text-primary">{filterSalary > 0 ? `₹${filterSalary}L+` : 'Any'}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="20"
-                  step="1"
-                  value={filterSalary}
-                  onChange={(e) => setFilterSalary(Number(e.target.value))}
-                  className="w-full accent-primary mb-2"
-                />
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 tracking-wider">
-                  <span>Any</span>
-                  <span>₹20L+</span>
-                </div>
-              </div>
-            )}
-          </div>
+
 
           {/* Apply Filters Button */}
           <button
@@ -517,7 +574,15 @@ const SearchResults = () => {
                       <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${job.iconBg || 'bg-indigo-50'} ${job.iconColor || 'text-indigo-600'}`}>
                         <Building2 size={24} />
                       </div>
-                      <span className="meta-text font-medium text-[11px] bg-slate-50 px-2 py-1 rounded border border-slate-100">{job.postedDate || job.time || 'Recently'}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="meta-text font-medium text-[11px] bg-slate-50 px-2 py-1 rounded border border-slate-100 flex items-center gap-1">
+                          <Calendar size={11} className="text-slate-400" />
+                          {job.postedDate || 'Recently'}
+                        </span>
+                        {job.reference_number && (
+                          <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{job.reference_number}</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mb-3">
@@ -527,7 +592,7 @@ const SearchResults = () => {
                       <p className="company-name tracking-wider line-clamp-1">{job.company}</p>
                     </div>
 
-                    <p className="body-text text-sm text-slate-500 mb-5 line-clamp-3 flex-1">{job.description}</p>
+                    <p className="body-text text-sm text-slate-500 mb-5 flex-1">{job.description}</p>
 
                     <div className="space-y-2.5 mb-6 meta-text font-medium text-slate-600">
                       <div className="flex items-center gap-2">
@@ -554,7 +619,7 @@ const SearchResults = () => {
                 ))}
 
               </div>
-            ) : viewMode === 'table' ? (
+            ) : /* viewMode === 'table' ? (
               <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
@@ -574,6 +639,9 @@ const SearchResults = () => {
                         <td className="p-4">
                           <div className="flex flex-wrap items-center gap-1.5 mb-1">
                             <span className="font-bold text-slate-900">{job.title}</span>
+                            {job.reference_number && (
+                              <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-600 px-1 py-0.5 rounded border border-slate-200">{job.reference_number}</span>
+                            )}
                             {job.isUrgent && (
                               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-600 text-white uppercase tracking-wider animate-pulse">
                                 URGENT
@@ -585,7 +653,10 @@ const SearchResults = () => {
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-medium tracking-wider">{job.postedDate || job.time || 'Recently'}</div>
+                          <div className="text-[10px] text-slate-500 font-medium tracking-wider flex items-center gap-1 mt-0.5">
+                            <Calendar size={11} className="text-slate-400" />
+                            {job.postedDate || 'Recently'}
+                          </div>
                         </td>
                         <td className="p-4">
                           <span className="font-medium text-xs text-slate-700 tracking-wider">{job.company}</span>
@@ -623,7 +694,7 @@ const SearchResults = () => {
 
 
               </div>
-            ) : (
+            ) : */ (
               <ClassifiedsGrid listingsData={classifiedsData} columnsCount={4} density="high" />
             )
           ) : (
@@ -637,7 +708,7 @@ const SearchResults = () => {
             </div>
           )}
 
-          {viewMode !== 'classifieds' && totalPages > 1 && (
+          {totalPages > 1 && (
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-fade-in">
               <span className="text-xs font-semibold text-slate-500">
                 Showing <span className="text-slate-800">{Math.min(startIndex + 1, filteredJobs.length)}</span> to <span className="text-slate-800">{Math.min(endIndex, filteredJobs.length)}</span> of <span className="text-slate-800">{filteredJobs.length}</span> jobs

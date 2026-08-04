@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useJobs } from '../../context/JobContext';
+import { API_BASE_URL } from '../../config';
 import {
   Users, Briefcase, Copy, Share2, LogOut, CheckCircle2,
   AlertTriangle, Play, Pause, ExternalLink, ShieldCheck, IndianRupee, X,
@@ -51,13 +53,13 @@ const AgentDashboard = () => {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
 
-  const token = localStorage.getItem('token');
+  const { token, userRole, logout } = useJobs();
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       // Fetch stats
-      const statsRes = await fetch('http://localhost:8000/api/agent/stats', {
+      const statsRes = await fetch(`${API_BASE_URL}/api/agent/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (statsRes.ok) {
@@ -66,7 +68,7 @@ const AgentDashboard = () => {
       }
 
       // Fetch referrals
-      const referralsRes = await fetch('http://localhost:8000/api/agent/referrals', {
+      const referralsRes = await fetch(`${API_BASE_URL}/api/agent/referrals`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (referralsRes.ok) {
@@ -82,7 +84,7 @@ const AgentDashboard = () => {
 
   const fetchAgentProfile = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/agent/profile', {
+      const response = await fetch(`${API_BASE_URL}/api/agent/profile`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -114,9 +116,13 @@ const AgentDashboard = () => {
       navigate('/auth');
       return;
     }
+    if (userRole !== 'AGENT') {
+      navigate(userRole === 'EMPLOYER' ? '/employer' : '/');
+      return;
+    }
     fetchDashboardData();
     fetchAgentProfile();
-  }, [token, navigate]);
+  }, [token, userRole, navigate]);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(stats.referral_code);
@@ -142,7 +148,7 @@ const AgentDashboard = () => {
 
     setActionLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/agent/referrals/${suspendingId}/suspend`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent/referrals/${suspendingId}/suspend`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +173,7 @@ const AgentDashboard = () => {
     if (!window.confirm('Are you sure you want to restore this employer?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/agent/referrals/${id}/unsuspend`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent/referrals/${id}/unsuspend`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -211,7 +217,7 @@ const AgentDashboard = () => {
     setProfileSaving(true);
     setProfileSuccessMsg('');
     try {
-      const response = await fetch('http://localhost:8000/api/agent/profile', {
+      const response = await fetch(`${API_BASE_URL}/api/agent/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -877,9 +883,8 @@ const AgentDashboard = () => {
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.removeItem('token');
-                  localStorage.removeItem('userRole');
-                  window.location.href = '/';
+                  logout();
+                  navigate('/');
                 }}
                 className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 border-0 rounded-xl cursor-pointer transition-all shadow-md shadow-rose-600/20"
               >

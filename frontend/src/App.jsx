@@ -7,6 +7,7 @@ import SearchResults from './components/SearchResults';
 import Auth from './components/Auth';
 import EmployerDashboard from './components/employer/EmployerDashboard';
 import AgentDashboard from './components/agent/AgentDashboard';
+import AdminDashboard from './components/admin/AdminDashboard';
 import Footer from './components/Footer';
 import { JobProvider } from './context/JobContext';
 import './App.css';
@@ -25,7 +26,8 @@ function AppContent() {
   const location = useLocation();
   const isEmployerRoute = location.pathname.startsWith('/employer');
   const isAgentRoute = location.pathname.startsWith('/agent');
-  const isConsoleRoute = isEmployerRoute || isAgentRoute;
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isConsoleRoute = isEmployerRoute || isAgentRoute || isAdminRoute;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -40,6 +42,8 @@ function AppContent() {
           <Route path="/employer/dashboard" element={<EmployerDashboard />} />
           <Route path="/agent" element={<AgentDashboard />} />
           <Route path="/agent/dashboard" element={<AgentDashboard />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </div>
       {!isConsoleRoute && <Footer />}

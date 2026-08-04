@@ -1,4 +1,0 @@
-Admin: admin@jobportal.com / Admin@123
-Agent: agent@jobportal.com / Agent@123 (Referral Code: AGENT-IND-00001)
-Employer: employer@jobportal.com / Employer@123 (Note: requires admin verification!)
-Candidate: candidate@jobportal.com / Candidate@123

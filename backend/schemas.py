@@ -13,10 +13,13 @@ class UserCreate(BaseModel):
     city: Optional[str] = None
     whatsapp_number: Optional[str] = None
     referral_code: Optional[str] = None
+    otp: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    otp: Optional[str] = None
+
 
 class EmployerProfileResponse(BaseModel):
     id: str
@@ -28,9 +31,32 @@ class EmployerProfileResponse(BaseModel):
     is_verified: bool
     status: Optional[str] = "Active"
     suspension_reason: Optional[str] = None
+    subscription_plan: Optional[str] = "Free"
+    subscription_status: Optional[str] = "Active"
 
     class Config:
         from_attributes = True
+
+class EmployerProfileUpdate(BaseModel):
+    fullName: Optional[str] = None
+    companyName: Optional[str] = None
+    industry: Optional[str] = None
+    logo: Optional[str] = None
+    establishmentYear: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    whatsappNumber: Optional[str] = None
+    defaultMessage: Optional[str] = None
+
+class JobCategoryResponse(BaseModel):
+    id: str
+    name: str
+
+    class Config:
+        from_attributes = True
+
+class JobCategoryCreate(BaseModel):
+    name: str
 
 class AgentProfileResponse(BaseModel):
     id: str
@@ -81,8 +107,24 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
+class AuthResponse(BaseModel):
+    status: str  # "success" or "otp_required"
+    email: Optional[str] = None
+    message: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
+    user: Optional[UserResponse] = None
+
+
 class SuspensionRequest(BaseModel):
     reason: str
+
+class SubscriptionUpdateRequest(BaseModel):
+    subscription_plan: str
+    subscription_status: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
 class ReferredEmployerResponse(BaseModel):
     id: str
@@ -115,11 +157,16 @@ class JobPostingCreate(BaseModel):
     is_featured: bool = False
     employer_id: Optional[str] = None
     status: Optional[str] = "Active"
-    views_count: Optional[str] = "0"
-    applications_count: Optional[str] = "0"
+    views_count: Optional[int] = 0
+    applications_count: Optional[int] = 0
+    classified_heading: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_period: Optional[str] = "year"
 
 class JobPostingResponse(BaseModel):
     id: str
+    reference_number: Optional[str] = None
     title: str
     company: str
     location: str
@@ -131,10 +178,58 @@ class JobPostingResponse(BaseModel):
     is_urgent: bool
     is_featured: bool
     status: str
-    views_count: str
-    applications_count: str
+    views_count: int
+    applications_count: int
     employer_id: Optional[str] = None
     created_at: Optional[datetime] = None
+    whatsapp_number: Optional[str] = None
+    moderation_reason: Optional[str] = None
+    appeal_text: Optional[str] = None
+    appeal_status: Optional[str] = None
+    classified_heading: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_period: Optional[str] = "year"
+
+    class Config:
+        from_attributes = True
+
+class SubscriptionPlanResponse(BaseModel):
+    id: str
+    name: str
+    tagline: Optional[str] = None
+    price: str
+    period: Optional[str] = None
+    features: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class SubscriptionPlanUpdate(BaseModel):
+    name: str
+    tagline: Optional[str] = None
+    price: str
+    period: Optional[str] = None
+    features: Optional[str] = None
+
+class JobSuspendRequest(BaseModel):
+    reason: str
+
+class JobAppealRequest(BaseModel):
+    appeal_text: str
+
+
+class ActivityLogResponse(BaseModel):
+    id: str
+    created_at: datetime
+    user_id: Optional[str] = None
+    user_email: Optional[str] = None
+    user_role: Optional[str] = None
+    action: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
+    details: str
+    ip_address: Optional[str] = None
 
     class Config:
         from_attributes = True

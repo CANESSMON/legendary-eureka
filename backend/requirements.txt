@@ -5,3 +5,5 @@ passlib[bcrypt]
 pyjwt
 pydantic[email]
 python-multipart
+python-dotenv
+psycopg2-binary

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useJobs } from '../../context/JobContext';
 import { 
   Briefcase, MapPin, DollarSign, Tag, Sparkles, 
-  Check, Eye, ArrowLeft, Building2, Flame, Zap, Phone
+  Check, Eye, ArrowLeft, Building2, Flame, Zap, Phone, AlertCircle
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -37,7 +37,7 @@ const CATEGORIES = [
   'Biotechnology & Pharmaceuticals',
   'Freelance & Gig Economy'
 ];
-const JOB_TYPES = ['Full-time', 'Part-time', 'Remote', 'Contract', 'Internship'];
+const JOB_TYPES = ['Full-time', 'Part-time', 'Remote', 'Work from home', 'Contract', 'Internship'];
 
 const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
   const { addJob, updateJob, employerProfile } = useJobs();
@@ -54,11 +54,29 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
     isUrgent: initialJob?.isUrgent ?? true,
     isFeatured: initialJob?.isFeatured ?? false,
     whatsappNumber: initialJob?.whatsappNumber || employerProfile.whatsappNumber || '',
-    whatsappMessage: initialJob?.whatsappMessage || employerProfile.defaultMessage || 'Hi, I am interested in applying for {title} at {company} listed on JobPortal.'
+    whatsappMessage: initialJob?.whatsappMessage || employerProfile.defaultMessage || 'Hi, I am interested in applying for {title} at {company} listed on JobPortal.',
+    classified_heading: initialJob?.classified_heading || '',
+    salary_min: initialJob?.salary_min || '',
+    salary_max: initialJob?.salary_max || '',
+    salary_period: initialJob?.salary_period || 'year'
   });
+
+  const getSalaryPreview = () => {
+    if (formData.salary_min && formData.salary_max) {
+      if (formData.salary_period === 'month') {
+        const formattedMin = parseInt(formData.salary_min).toLocaleString('en-IN');
+        const formattedMax = parseInt(formData.salary_max).toLocaleString('en-IN');
+        return `₹${formattedMin} - ₹${formattedMax} PM`;
+      } else {
+        return `₹${formData.salary_min}L - ₹${formData.salary_max}L PA`;
+      }
+    }
+    return formData.salary || 'Salary Range';
+  };
 
   const [activeTab, setActiveTab] = useState('split'); // 'split', 'form', 'preview'
   const [successBanner, setSuccessBanner] = useState(false);
+  const [previewType, setPreviewType] = useState('card'); // 'card' or 'classified'
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -68,23 +86,35 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const [errorBanner, setErrorBanner] = useState(null);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) {
       alert('Please enter a Job Title');
       return;
     }
-
-    if (initialJob) {
-      updateJob(initialJob.id, formData);
-    } else {
-      addJob(formData);
+    const descWords = formData.description.trim() === '' ? 0 : formData.description.trim().split(/\s+/).length;
+    if (descWords > 50) {
+      setErrorBanner('Job description cannot exceed 50 words.');
+      return;
     }
+    setErrorBanner(null);
 
-    setSuccessBanner(true);
-    setTimeout(() => {
-      if (onSuccess) onSuccess();
-    }, 900);
+    try {
+      if (initialJob) {
+        await updateJob(initialJob.id, formData);
+      } else {
+        await addJob(formData);
+      }
+
+      setSuccessBanner(true);
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+      }, 900);
+    } catch (error) {
+      setErrorBanner(error.message || 'Failed to save job posting');
+    }
   };
 
   return (
@@ -103,6 +133,13 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
         <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-3 font-semibold text-sm animate-fade-in">
           <Check className="w-5 h-5 text-emerald-600 shrink-0" />
           Job posting saved! Updated real-time on public job board.
+        </div>
+      )}
+
+      {errorBanner && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-center gap-3 font-semibold text-sm animate-fade-in">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          {errorBanner}
         </div>
       )}
 
@@ -153,6 +190,20 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    Classified Heading <span className="text-slate-400 font-normal">(Optional, for Classified view only - e.g. "Wanted Accountant")</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="classified_heading"
+                    value={formData.classified_heading}
+                    onChange={handleChange}
+                    placeholder="e.g. WANTED ACCOUNTANT / WANTED RECEPTIONIST"
+                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -206,20 +257,55 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Salary Range
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Salary Range <span className="text-rose-500">*</span>
                   </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                    <input
-                      type="text"
-                      name="salary"
-                      value={formData.salary}
-                      onChange={handleChange}
-                      placeholder="e.g. ₹15L - ₹25L PA"
-                      className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                        Minimum Salary
+                      </label>
+                      <input
+                        type="number"
+                        name="salary_min"
+                        value={formData.salary_min}
+                        onChange={handleChange}
+                        placeholder={formData.salary_period === 'month' ? 'e.g. 20000' : 'e.g. 12'}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                        Maximum Salary
+                      </label>
+                      <input
+                        type="number"
+                        name="salary_max"
+                        value={formData.salary_max}
+                        onChange={handleChange}
+                        placeholder={formData.salary_period === 'month' ? 'e.g. 40000' : 'e.g. 18'}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                        Salary Period
+                      </label>
+                      <select
+                        name="salary_period"
+                        value={formData.salary_period}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900 bg-white"
+                      >
+                        <option value="year">Lakhs Per Annum (LPA)</option>
+                        <option value="month">Rupees Per Month (PM)</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -321,15 +407,25 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                 </h3>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Job Description
-                  </label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Job Description <span className="text-rose-500">*</span>
+                    </label>
+                    <span className={`text-[10px] font-bold ${
+                      (formData.description.trim() === '' ? 0 : formData.description.trim().split(/\s+/).length) > 50
+                        ? 'text-rose-600'
+                        : 'text-slate-400'
+                    }`}>
+                      {formData.description.trim() === '' ? 0 : formData.description.trim().split(/\s+/).length} / 50 words
+                    </span>
+                  </div>
                   <textarea
                     name="description"
                     rows={4}
                     value={formData.description}
                     onChange={handleChange}
-                    placeholder="Describe role responsibilities and overview..."
+                    placeholder="Describe role responsibilities and overview (Max 50 words)..."
+                    required
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
                   ></textarea>
                 </div>
@@ -375,14 +471,32 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                 <Eye size={15} className="text-primary" />
-                Live Candidate Card Preview
+                Live Candidate Preview
               </span>
-              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                Real-time sync
-              </span>
+              <div className="flex items-center gap-2 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setPreviewType('card')}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                    previewType === 'card' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewType('classified')}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                    previewType === 'classified' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Classified
+                </button>
+              </div>
             </div>
 
-              {/* Job Card Mockup */}
+            {previewType === 'card' ? (
+              /* Job Card Mockup */
               <div className="bg-white rounded-2xl border-2 border-primary/20 shadow-lg p-6 relative overflow-hidden transition-all">
                 {formData.isUrgent && (
                   <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-rose-500 via-red-600 to-amber-500"></div>
@@ -429,11 +543,11 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                   </div>
                   <div className="flex items-center gap-1 font-bold text-slate-900">
                     <DollarSign size={13} className="text-emerald-600" />
-                    <span>{formData.salary || 'Salary Range'}</span>
+                    <span>{getSalaryPreview()}</span>
                   </div>
                 </div>
 
-                <p className="body-text text-xs text-slate-600 line-clamp-3 leading-relaxed mb-4">
+                <p className="body-text text-xs text-slate-600 leading-relaxed mb-4">
                   {formData.description || 'Fill in form fields to preview candidate card...'}
                 </p>
 
@@ -463,8 +577,51 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                   </p>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Classified Ad Block Mockup */
+              <div className="bg-slate-50 rounded-2xl border-2 border-primary/20 shadow-lg p-6 relative overflow-hidden transition-all bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:12px_12px] flex flex-col items-center">
+                <div className="border border-slate-400 bg-white shadow-sm overflow-hidden w-full max-w-sm">
+                  {/* Category Header */}
+                  <div className="bg-slate-900 text-white font-bold text-[10px] tracking-widest text-center py-1.5 uppercase">
+                    {formData.classified_heading || formData.category || 'Category'}
+                  </div>
+                  
+                  {/* Classified Item */}
+                  <div className="p-3 text-[11px] leading-tight border-b border-slate-200 last:border-b-0 bg-white relative pb-6">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-black text-[12px] text-slate-900 leading-tight pr-2 uppercase">{formData.title || 'JOB TITLE'}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {formData.isUrgent && <span className="text-white bg-rose-600 px-1 py-0.5 text-[8px] font-black rounded-xs">URGENT</span>}
+                        {formData.isFeatured && <span className="text-white bg-amber-500 px-1 py-0.5 text-[8px] font-bold rounded-xs">FEATURED</span>}
+                      </div>
+                    </div>
+                    {formData.company && (
+                      <p className="text-[9px] font-bold text-slate-500 tracking-wider mb-1 uppercase">{formData.company}</p>
+                    )}
+                    
+
+                    <p className="text-slate-800 text-justify">
+                      <span className="font-bold mr-1">
+                        {getSalaryPreview()} — {formData.location || 'Location'}.
+                      </span>
+                      {formData.description || 'Fill in form details to preview this job posting in the newspaper-style classified grid...'}
+                    </p>
+
+                    <div className="mt-2 flex items-center justify-between absolute bottom-1 left-3 right-3">
+                      <span className="text-[9px] font-bold text-primary">
+                        Apply Now &rarr;
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-500 text-center mt-4 font-medium italic bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                  Newspaper-style classified view card preview. This represents how this listing is formatted and grouped in the smart columns layout.
+                </div>
+              </div>
+            )}
           </div>
+        </div>
       </div>
     </div>
   );

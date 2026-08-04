@@ -1,28 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Briefcase, Menu } from 'lucide-react';
+import { useJobs } from '../context/JobContext';
 
 const Navbar = () => {
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [userRole, setUserRole] = useState(localStorage.getItem('userRole'));
-
-  useEffect(() => {
-    const updateAuth = () => {
-      setToken(localStorage.getItem('token'));
-      setUserRole(localStorage.getItem('userRole'));
-    };
-
-    window.addEventListener('storage', updateAuth);
-    window.addEventListener('focus', updateAuth);
-
-    const interval = setInterval(updateAuth, 800);
-
-    return () => {
-      window.removeEventListener('storage', updateAuth);
-      window.removeEventListener('focus', updateAuth);
-      clearInterval(interval);
-    };
-  }, []);
+  const { token, userRole } = useJobs();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
@@ -39,7 +21,11 @@ const Navbar = () => {
 
         <div className="hidden md:flex items-center gap-4">
           {token ? (
-            userRole === 'AGENT' ? (
+            userRole === 'SUPER_USER' ? (
+              <Link to="/admin" className="bg-primary hover:bg-primary-hover text-white px-6 py-2 rounded-lg transition-all transform hover:-translate-y-0.5 shadow-lg shadow-primary/30 no-underline btn inline-block">
+                Admin Console
+              </Link>
+            ) : userRole === 'AGENT' ? (
               <Link to="/agent" className="bg-primary hover:bg-primary-hover text-white px-6 py-2 rounded-lg transition-all transform hover:-translate-y-0.5 shadow-lg shadow-primary/30 no-underline btn inline-block">
                 Agent Console
               </Link>
