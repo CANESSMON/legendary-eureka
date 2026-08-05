@@ -9,7 +9,7 @@ import string
 import jwt
 from datetime import datetime, timedelta, timezone
 
-import models, schemas
+import models, schemas, config
 from database import engine, get_db
 from routers.admin import router as admin_router
 from utils_logging import log_activity
@@ -30,6 +30,8 @@ try:
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN salary_max INTEGER NULL;"))
         if 'salary_period' not in columns:
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN salary_period VARCHAR(50) DEFAULT 'year';"))
+        if 'used_paid_credit' not in columns:
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN used_paid_credit BOOLEAN DEFAULT FALSE;"))
         conn.commit()
         print("Database schema check/updates completed successfully!")
 except Exception as e:
@@ -618,19 +620,33 @@ def create_job(job: schemas.JobPostingCreate, current_user: models.User = Depend
     if employer_profile.status == "Suspended":
         raise HTTPException(status_code=403, detail="Employer account is suspended")
     
-    if employer_profile.subscription_status != "Active":
+    if employer_profile.subscription_status != "Active" and employer_profile.subscription_plan in ["Pro", "Enterprise"]:
         raise HTTPException(status_code=403, detail="Your subscription is currently inactive. Please renew to post jobs.")
 
-    if employer_profile.subscription_plan == "Free":
+    has_unlimited = (
+        employer_profile.subscription_plan in ["Pro", "Enterprise"] and 
+        employer_profile.subscription_status == "Active"
+    )
+
+    used_paid_credit = False
+    if not has_unlimited:
         job_count = db.query(models.JobPosting).filter(models.JobPosting.employer_id == employer_profile.id).count()
         if job_count >= 3:
-            raise HTTPException(status_code=403, detail="Free plan limit reached. Please upgrade your plan to post more jobs.")
-    
+            credits_rec = db.query(models.PostCredits).filter(models.PostCredits.employer_id == employer_profile.id).first()
+            if not credits_rec or credits_rec.credits <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail="CREDITS_EXHAUSTED"
+                )
+            credits_rec.credits -= 1
+            used_paid_credit = True
+
     job_dict = job.dict()
     job_dict["employer_id"] = employer_profile.id
     job_dict["views_count"] = 0
     job_dict["applications_count"] = 0
-    
+    job_dict["used_paid_credit"] = used_paid_credit
+
     new_job = models.JobPosting(**job_dict)
     db.add(new_job)
     db.commit()
@@ -982,4 +998,167 @@ def update_employer_profile(profile_data: schemas.EmployerProfileUpdate, current
     db.refresh(employer_profile)
     db.refresh(current_user)
     return employer_profile
+
+
+# Pay-Per-Post Payments Implementation
+CREDIT_PACKS = {
+    "single": {"price": 99, "credits": 1},
+    "bundle_5": {"price": 399, "credits": 5},
+    "bundle_10": {"price": 699, "credits": 10}
+}
+
+razorpay_client = None
+if not config.RAZORPAY_MOCK_MODE:
+    try:
+        import razorpay
+        razorpay_client = razorpay.Client(auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET))
+    except Exception as e:
+        print(f"Failed to initialize Razorpay Client: {e}. Falling back to MOCK mode.")
+
+
+def get_credits_count(employer_id: str, db: Session) -> int:
+    credits_rec = db.query(models.PostCredits).filter(models.PostCredits.employer_id == employer_id).first()
+    return credits_rec.credits if credits_rec else 0
+
+
+@app.get("/api/employer/credits", response_model=schemas.EmployerCreditsResponse)
+def get_employer_credits(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != models.RoleEnum.EMPLOYER:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    employer_profile = db.query(models.EmployerProfile).filter(models.EmployerProfile.user_id == current_user.id).first()
+    if not employer_profile:
+        raise HTTPException(status_code=400, detail="Employer profile not found")
+        
+    free_posts_used = db.query(models.JobPosting).filter(
+        models.JobPosting.employer_id == employer_profile.id,
+        models.JobPosting.used_paid_credit == False
+    ).count()
+    
+    credits_val = get_credits_count(employer_profile.id, db)
+    
+    return schemas.EmployerCreditsResponse(
+        credits=credits_val,
+        free_posts_used=min(free_posts_used, 3),
+        free_posts_limit=3
+    )
+
+
+@app.post("/api/payments/create-order", response_model=schemas.CreditOrderResponse)
+def create_credit_order(order_data: schemas.CreditOrderCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != models.RoleEnum.EMPLOYER:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    employer_profile = db.query(models.EmployerProfile).filter(models.EmployerProfile.user_id == current_user.id).first()
+    if not employer_profile:
+        raise HTTPException(status_code=400, detail="Employer profile not found")
+        
+    pack = CREDIT_PACKS.get(order_data.pack_id)
+    if not pack:
+        raise HTTPException(status_code=400, detail="Invalid pack selection")
+        
+    amount_paise = pack["price"] * 100
+    
+    mock_mode = config.RAZORPAY_MOCK_MODE or (razorpay_client is None)
+    razorpay_order_id = f"order_mock_{uuid.uuid4().hex[:14]}"
+    
+    if not mock_mode:
+        try:
+            order_payload = {
+                "amount": amount_paise,
+                "currency": "INR",
+                "receipt": f"receipt_{uuid.uuid4().hex[:10]}",
+                "payment_capture": 1
+            }
+            order = razorpay_client.order.create(data=order_payload)
+            razorpay_order_id = order["id"]
+        except Exception as e:
+            print(f"Razorpay order creation failed: {e}. Falling back to mock order.")
+            mock_mode = True
+            
+    db_txn = models.PaymentTransaction(
+        employer_id=employer_profile.id,
+        razorpay_order_id=razorpay_order_id,
+        amount=pack["price"],
+        credits_purchased=pack["credits"],
+        status="Created"
+    )
+    db.add(db_txn)
+    db.commit()
+    db.refresh(db_txn)
+    
+    return schemas.CreditOrderResponse(
+        id=db_txn.id,
+        razorpay_order_id=razorpay_order_id,
+        amount=amount_paise,
+        currency="INR",
+        key_id=config.RAZORPAY_KEY_ID,
+        mock_mode=mock_mode
+    )
+
+
+@app.post("/api/payments/verify")
+def verify_payment(payload: schemas.PaymentVerification, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != models.RoleEnum.EMPLOYER:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    employer_profile = db.query(models.EmployerProfile).filter(models.EmployerProfile.user_id == current_user.id).first()
+    if not employer_profile:
+        raise HTTPException(status_code=400, detail="Employer profile not found")
+        
+    db_txn = db.query(models.PaymentTransaction).filter(models.PaymentTransaction.razorpay_order_id == payload.razorpay_order_id).first()
+    if not db_txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+        
+    if db_txn.status == "Paid":
+        return {"status": "success", "message": "Payment already verified", "credits": get_credits_count(employer_profile.id, db)}
+        
+    mock_mode = config.RAZORPAY_MOCK_MODE or (razorpay_client is None)
+    is_valid = False
+    
+    if payload.is_mocked or mock_mode:
+        is_valid = True
+    else:
+        try:
+            params = {
+                'razorpay_order_id': payload.razorpay_order_id,
+                'razorpay_payment_id': payload.razorpay_payment_id,
+                'razorpay_signature': payload.razorpay_signature
+            }
+            razorpay_client.utility.verify_payment_signature(params)
+            is_valid = True
+        except Exception as e:
+            print(f"Signature verification failed: {e}")
+            is_valid = False
+            
+    if not is_valid:
+        db_txn.status = "Failed"
+        db.commit()
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+        
+    db_txn.status = "Paid"
+    db_txn.razorpay_payment_id = payload.razorpay_payment_id
+    db_txn.razorpay_signature = payload.razorpay_signature
+    
+    credits_rec = db.query(models.PostCredits).filter(models.PostCredits.employer_id == employer_profile.id).first()
+    if not credits_rec:
+        credits_rec = models.PostCredits(employer_id=employer_profile.id, credits=0)
+        db.add(credits_rec)
+        db.commit()
+        db.refresh(credits_rec)
+        
+    credits_rec.credits += db_txn.credits_purchased
+    db.commit()
+    
+    log_activity(
+        db=db,
+        action="payment_verify",
+        details=f"Employer '{employer_profile.company_name}' purchased {db_txn.credits_purchased} credits for INR {db_txn.amount} (Status: Paid)",
+        user=current_user,
+        entity_type="payment",
+        entity_id=db_txn.id
+    )
+    
+    return {
+        "status": "success",
+        "message": "Payment verified and credits added successfully!",
+        "credits": credits_rec.credits
+    }
 

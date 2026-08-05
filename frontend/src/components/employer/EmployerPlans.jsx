@@ -4,6 +4,7 @@ import {
   Building2, CheckCircle2, Flame, Users, ArrowRight
 } from 'lucide-react';
 import { useJobs } from '../../context/JobContext';
+import BuyCreditsModal from './BuyCreditsModal';
 
 const FALLBACK_PLANS = [
   {
@@ -71,7 +72,8 @@ const FALLBACK_PLANS = [
 const EmployerPlans = () => {
   const [selectedBilling, setSelectedBilling] = useState('monthly'); // 'monthly' | 'annual'
   const [successMessage, setSuccessMessage] = useState('');
-  const { employerProfile, plans } = useJobs();
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+  const { employerProfile, plans, fetchEmployerCredits } = useJobs();
 
   const isCurrentPlan = (planId) => {
     const current = (employerProfile?.subscription_plan || 'Free').toLowerCase();
@@ -128,8 +130,7 @@ const EmployerPlans = () => {
 
   const handleSelectPlan = (plan) => {
     if (plan.isCurrent) return;
-    setSuccessMessage(`Plan choice noted! Please request your Administrator to update your plan to ${plan.name} via the Admin subscription dropdown.`);
-    setTimeout(() => setSuccessMessage(''), 6000);
+    setIsBuyModalOpen(true);
   };
 
   return (
@@ -259,13 +260,22 @@ const EmployerPlans = () => {
 
         <button
           type="button"
-          onClick={() => handleSelectPlan(PLANS[1])}
+          onClick={() => setIsBuyModalOpen(true)}
           className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl text-xs transition-all shadow-md shrink-0 border-0 cursor-pointer flex items-center gap-2"
         >
           <Sparkles size={16} />
           Upgrade to Pro Plan
         </button>
       </div>
+
+      <BuyCreditsModal 
+        isOpen={isBuyModalOpen} 
+        onClose={() => setIsBuyModalOpen(false)} 
+        onSuccess={() => {
+          setIsBuyModalOpen(false);
+          fetchEmployerCredits();
+        }} 
+      />
     </div>
   );
 };

@@ -5,6 +5,7 @@ import ManagePostings from './ManagePostings';
 import JobPostForm from './JobPostForm';
 import CompanyProfile from './CompanyProfile';
 import EmployerPlans from './EmployerPlans';
+import BuyCreditsModal from './BuyCreditsModal';
 import {
   LayoutDashboard, Briefcase, PlusCircle,
   UserCheck, ChevronRight, ExternalLink, Menu, X,
@@ -17,7 +18,11 @@ const EmployerDashboard = () => {
   const [editingJob, setEditingJob] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const { employerProfile, getEmployerJobs, token, userRole, logout } = useJobs();
+  const [isBuyCreditsOpen, setIsBuyCreditsOpen] = useState(false);
+  const { 
+    employerProfile, getEmployerJobs, token, userRole, logout,
+    employerCredits, fetchEmployerCredits
+  } = useJobs();
   const employerJobs = getEmployerJobs();
   const navigate = useNavigate();
 
@@ -249,16 +254,24 @@ const EmployerDashboard = () => {
         </div>
 
         <div className="p-3 border-t border-indigo-100/80 space-y-2">
-          <div className="p-3 rounded-xl bg-white/80 border border-indigo-100/80 text-slate-600 text-[11px] font-medium space-y-1.5 shadow-2xs">
+          <div className="p-3 rounded-xl bg-white/80 border border-indigo-100/80 text-slate-600 text-[11px] font-medium space-y-2 shadow-2xs">
             <div className="flex justify-between items-center text-slate-900 font-bold">
-              <span>Employer Quick Stats</span>
-              <span className="text-emerald-600 flex items-center gap-1 text-[10px]">● Active</span>
+              <span>Posting Balance</span>
+              <button 
+                onClick={() => setIsBuyCreditsOpen(true)}
+                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold flex items-center gap-0.5 border-0 bg-transparent p-0 cursor-pointer"
+              >
+                + Add Credits
+              </button>
             </div>
-            <p className="text-[10px] leading-relaxed text-slate-500">
-              {employerJobs.length} Job Postings
-              <br />
-              • Direct WhatsApp candidate redirection enabled
-            </p>
+            <div className="flex items-center justify-between bg-indigo-50/40 p-2 rounded-lg border border-indigo-100/50">
+              <span className="text-[10px] text-slate-500">Free posts used:</span>
+              <span className="text-[10px] font-bold text-slate-700">{employerCredits?.free_posts_used || 0}/3</span>
+            </div>
+            <div className="flex items-center justify-between bg-emerald-50/40 p-2 rounded-lg border border-emerald-100/50">
+              <span className="text-[10px] text-slate-500 font-semibold">Post Credits:</span>
+              <span className="text-[11px] font-black text-emerald-700">{employerCredits?.credits || 0} Credits</span>
+            </div>
           </div>
 
           <Link
@@ -467,6 +480,12 @@ const EmployerDashboard = () => {
           </div>
         </div>
       )}
+
+      <BuyCreditsModal 
+        isOpen={isBuyCreditsOpen} 
+        onClose={() => setIsBuyCreditsOpen(false)} 
+        onSuccess={() => fetchEmployerCredits()} 
+      />
     </div>
   );
 };

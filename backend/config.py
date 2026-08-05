@@ -23,3 +23,9 @@ SMTP_USER = os.getenv("SMTP_USER", "PRAFUL101NAYAK@GMAIL.COM")
 SMTP_PASS = os.getenv("SMTP_PASS", "wdji tkzk kqsw vvcv")
 SMTP_TO = os.getenv("SMTP_TO", "digitalpraful101@gmail.com")
 
+# Razorpay Payment Gateway Configuration
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder_key_id")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "placeholder_secret")
+# Mock Mode toggler: if keys are placeholder, we run in Sandbox mode automatically.
+RAZORPAY_MOCK_MODE = os.getenv("RAZORPAY_MOCK_MODE", "true").lower() == "true" or RAZORPAY_KEY_ID == "rzp_test_placeholder_key_id"
+

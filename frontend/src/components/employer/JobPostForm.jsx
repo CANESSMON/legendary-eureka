@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useJobs } from '../../context/JobContext';
+import BuyCreditsModal from './BuyCreditsModal';
 import { 
   Briefcase, MapPin, DollarSign, Tag, Sparkles, 
   Check, Eye, ArrowLeft, Building2, Flame, Zap, Phone, AlertCircle
@@ -40,7 +41,8 @@ const CATEGORIES = [
 const JOB_TYPES = ['Full-time', 'Part-time', 'Remote', 'Work from home', 'Contract', 'Internship'];
 
 const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
-  const { addJob, updateJob, employerProfile } = useJobs();
+  const { addJob, updateJob, employerProfile, fetchEmployerCredits } = useJobs();
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     title: initialJob?.title || '',
@@ -113,7 +115,11 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
         if (onSuccess) onSuccess();
       }, 900);
     } catch (error) {
-      setErrorBanner(error.message || 'Failed to save job posting');
+      if (error.message === 'CREDITS_EXHAUSTED' || error.status === 402) {
+        setErrorBanner('CREDITS_EXHAUSTED');
+      } else {
+        setErrorBanner(error.message || 'Failed to save job posting');
+      }
     }
   };
 
@@ -136,7 +142,24 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
         </div>
       )}
 
-      {errorBanner && (
+      {errorBanner && errorBanner === 'CREDITS_EXHAUSTED' ? (
+        <div className="p-4 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-semibold text-sm animate-fade-in shadow-2xs">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-indigo-600 shrink-0" />
+            <div>
+              <p className="font-bold text-slate-900">Post Limit Reached</p>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">You have exhausted your 3 free job posts. Purchase post credits to publish this job listing.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsBuyModalOpen(true)}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all border-0 shadow-sm shrink-0 cursor-pointer"
+          >
+            Buy Post Credits
+          </button>
+        </div>
+      ) : errorBanner && (
         <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-center gap-3 font-semibold text-sm animate-fade-in">
           <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
           {errorBanner}
@@ -623,6 +646,16 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
           </div>
         </div>
       </div>
+
+      <BuyCreditsModal 
+        isOpen={isBuyModalOpen} 
+        onClose={() => setIsBuyModalOpen(false)} 
+        onSuccess={() => {
+          setIsBuyModalOpen(false);
+          setErrorBanner(null);
+          fetchEmployerCredits();
+        }} 
+      />
     </div>
   );
 };

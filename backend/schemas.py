@@ -234,3 +234,42 @@ class ActivityLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class CreditOrderCreate(BaseModel):
+    pack_id: str  # 'single', 'bundle_5', 'bundle_10'
+
+
+class CreditOrderResponse(BaseModel):
+    id: str  # locally created transaction ID
+    razorpay_order_id: str
+    amount: int  # in paise
+    currency: str
+    key_id: str  # so the client knows which key to use
+    mock_mode: bool
+
+
+class PaymentVerification(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+    is_mocked: Optional[bool] = False  # for sandbox/mock payment testing
+
+
+class EmployerCreditsResponse(BaseModel):
+    credits: int
+    free_posts_used: int
+    free_posts_limit: int
+
+
+class PaymentTransactionResponse(BaseModel):
+    id: str
+    amount: int
+    credits_purchased: int
+    status: str
+    created_at: datetime
+    razorpay_order_id: str
+    razorpay_payment_id: Optional[str]
+
+    class Config:
+        from_attributes = True
+

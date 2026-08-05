@@ -11,6 +11,7 @@ export const JobProvider = ({ children }) => {
   const [jobs, setJobs] = useState([]);
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
   const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || null);
+  const [employerCredits, setEmployerCredits] = useState({ credits: 0, free_posts_used: 0, free_posts_limit: 3 });
 
   const [employerProfile, setEmployerProfile] = useState(() => {
     const saved = localStorage.getItem('jobportal_employer_profile');
@@ -113,6 +114,101 @@ export const JobProvider = ({ children }) => {
     });
   };
 
+  const fetchEmployerCredits = async () => {
+    if (!token || userRole !== 'EMPLOYER') return;
+    if (USE_MOCK_DATA) {
+      const savedCredits = localStorage.getItem('jobportal_mock_credits');
+      if (savedCredits) {
+        setEmployerCredits(JSON.parse(savedCredits));
+      } else {
+        const defaultCredits = { credits: 0, free_posts_used: 0, free_posts_limit: 3 };
+        setEmployerCredits(defaultCredits);
+        localStorage.setItem('jobportal_mock_credits', JSON.stringify(defaultCredits));
+      }
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/employer/credits`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEmployerCredits(data);
+      }
+    } catch (err) {
+      console.error('Error fetching employer credits:', err);
+    }
+  };
+
+  const createPaymentOrder = async (packId) => {
+    if (USE_MOCK_DATA) {
+      return {
+        id: `txn_${Math.random().toString(36).substr(2, 9)}`,
+        razorpay_order_id: `order_mock_${Math.random().toString(36).substr(2, 14)}`,
+        amount: packId === 'single' ? 9900 : packId === 'bundle_5' ? 39900 : 69900,
+        currency: 'INR',
+        key_id: 'rzp_test_mock_key',
+        mock_mode: true
+      };
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/payments/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pack_id: packId })
+      });
+      if (response.ok) {
+        return await response.json();
+      } else {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to initiate payment.');
+      }
+    } catch (err) {
+      console.error('Error creating payment order:', err);
+      throw err;
+    }
+  };
+
+  const verifyPayment = async (verificationData) => {
+    if (USE_MOCK_DATA) {
+      const savedCredits = localStorage.getItem('jobportal_mock_credits');
+      let parsed = savedCredits ? JSON.parse(savedCredits) : { credits: 0, free_posts_used: 3, free_posts_limit: 3 };
+      
+      let added = 1;
+      if (verificationData.razorpay_order_id.includes('bundle_5') || verificationData.pack_id === 'bundle_5') added = 5;
+      else if (verificationData.razorpay_order_id.includes('bundle_10') || verificationData.pack_id === 'bundle_10') added = 10;
+      
+      parsed.credits += added;
+      setEmployerCredits(parsed);
+      localStorage.setItem('jobportal_mock_credits', JSON.stringify(parsed));
+      return { status: 'success', message: 'Mock payment verified!', credits: parsed.credits };
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/payments/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(verificationData)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        await fetchEmployerCredits();
+        return data;
+      } else {
+        const err = await response.json();
+        throw new Error(err.detail || 'Payment verification failed.');
+      }
+    } catch (err) {
+      console.error('Error verifying payment:', err);
+      throw err;
+    }
+  };
+
   const refreshEmployerProfile = async () => {
     if (!token || userRole !== 'EMPLOYER') return;
     try {
@@ -137,6 +233,7 @@ export const JobProvider = ({ children }) => {
           subscription_status: empProfile.subscription_status || prev.subscription_status
         }));
       }
+      await fetchEmployerCredits();
     } catch (err) {
       console.error('Error refreshing employer profile:', err);
     }
@@ -250,6 +347,25 @@ export const JobProvider = ({ children }) => {
   // Actions
   const addJob = async (newJobData) => {
     if (USE_MOCK_DATA) {
+      const employerJobs = jobs.filter(j => j.employerId === employerProfile.id);
+      let usedPaidCredit = false;
+
+      if (employerJobs.length >= 3) {
+        const savedCredits = localStorage.getItem('jobportal_mock_credits');
+        let parsed = savedCredits ? JSON.parse(savedCredits) : { credits: 0, free_posts_used: 3, free_posts_limit: 3 };
+        
+        if (parsed.credits <= 0) {
+          const err = new Error('CREDITS_EXHAUSTED');
+          err.status = 402;
+          err.code = 'CREDITS_EXHAUSTED';
+          throw err;
+        }
+        parsed.credits -= 1;
+        setEmployerCredits(parsed);
+        localStorage.setItem('jobportal_mock_credits', JSON.stringify(parsed));
+        usedPaidCredit = true;
+      }
+
       const newJob = {
         id: Date.now(),
         company: newJobData.company || employerProfile.companyName,
@@ -265,6 +381,8 @@ export const JobProvider = ({ children }) => {
         applicants: [],
         status: 'Active',
         minSalary: parseInt(newJobData.salary) || 10,
+        employerId: employerProfile.id,
+        used_paid_credit: usedPaidCredit,
         ...newJobData
       };
       setJobs((prevJobs) => [newJob, ...prevJobs]);
@@ -344,8 +462,15 @@ export const JobProvider = ({ children }) => {
         setJobs((prevJobs) => [mappedJob, ...prevJobs]);
         return mappedJob;
       } else {
-        const errData = await response.json();
-        throw new Error(errData.detail || 'Failed to create job posting.');
+        const errStatus = response.status;
+        let errMsg = 'Failed to create job posting.';
+        try {
+          const errData = await response.json();
+          errMsg = errData.detail || errMsg;
+        } catch (e) {}
+        const error = new Error(errMsg);
+        error.status = errStatus;
+        throw error;
       }
     } catch (err) {
       console.error('Error adding job to API:', err);
@@ -1087,7 +1212,12 @@ export const JobProvider = ({ children }) => {
         suspendJob,
         submitAppeal,
         restoreJob,
-        fetchActivityLogs
+        fetchActivityLogs,
+        employerCredits,
+        setEmployerCredits,
+        fetchEmployerCredits,
+        createPaymentOrder,
+        verifyPayment
       }}
     >
       {children}
