@@ -134,6 +134,8 @@ export const JobProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         setEmployerCredits(data);
+      } else if (response.status === 401) {
+        logout();
       }
     } catch (err) {
       console.error('Error fetching employer credits:', err);
@@ -232,6 +234,8 @@ export const JobProvider = ({ children }) => {
           subscription_plan: empProfile.subscription_plan || prev.subscription_plan,
           subscription_status: empProfile.subscription_status || prev.subscription_status
         }));
+      } else if (response.status === 401) {
+        logout();
       }
       await fetchEmployerCredits();
     } catch (err) {
@@ -812,7 +816,7 @@ export const JobProvider = ({ children }) => {
       requirements: job.requirements || '',
       is_urgent: nextUrgent,
       is_featured: job.isFeatured,
-      employer_id: job.employer_id || employerProfile.id || null,
+      employer_id: job.employerId || employerProfile.id || null,
       status: job.status || 'Active'
     };
 
@@ -859,7 +863,7 @@ export const JobProvider = ({ children }) => {
       requirements: job.requirements || '',
       is_urgent: job.isUrgent,
       is_featured: nextFeatured,
-      employer_id: job.employer_id || employerProfile.id || null,
+      employer_id: job.employerId || employerProfile.id || null,
       status: job.status || 'Active'
     };
 

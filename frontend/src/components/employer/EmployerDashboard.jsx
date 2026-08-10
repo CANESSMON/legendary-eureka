@@ -307,18 +307,18 @@ const EmployerDashboard = () => {
       <div className="flex-1 flex flex-col">
 
         {/* Top Header Navbar */}
-        <header className="hidden md:flex h-14 bg-white border-b border-slate-200/90 px-6 items-center justify-between shadow-2xs">
+        <header className="hidden md:flex h-[68px] bg-white border-b border-[#E2E8F0] px-10 items-center justify-between shadow-none shrink-0">
           {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-            <span className="text-slate-400">Employer Portal</span>
-            <span className="text-slate-300">/</span>
-            <span className="text-slate-900 font-extrabold">{getBreadcrumbTitle()}</span>
+          <div className="flex items-center text-[13px] font-medium text-[#7890AD]">
+            <span>Employer Portal</span>
+            <span className="text-[#CBD5E1] mx-3">/</span>
+            <span className="text-[#172033] font-semibold">{getBreadcrumbTitle()}</span>
           </div>
         </header>
 
         {/* Dynamic View Container */}
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <main className="flex-1 px-4 py-6 sm:px-6 md:px-10 lg:px-12 md:py-8 bg-[#F8FAFC]">
+          <div className="max-w-[1500px] mx-auto space-y-8 w-full">
 
             {employerProfile.status === 'Suspended' && (
               <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex items-start gap-3 font-semibold text-xs animate-fade-in shadow-2xs">
