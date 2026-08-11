@@ -153,7 +153,7 @@ const Auth = () => {
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
       {/* Left Panel - Form */}
-      <div className="w-full md:w-1/2 flex flex-col justify-center px-8 md:px-16 lg:px-24 pt-24 pb-12">
+      <div className="w-full md:w-1/2 flex flex-col justify-center px-8 md:px-16 lg:px-24 pt-28 pb-12">
         <div className="max-w-md w-full mx-auto">
           <h2 className="mb-2">{getTitle()}</h2>
           <p className="body-text text-slate-500 mb-8">{getSubtitle()}</p>
@@ -381,7 +381,7 @@ const Auth = () => {
       </div>
 
       {/* Right Panel - Branding/Image */}
-      <div className="hidden md:flex w-full md:w-1/2 p-6 pt-24">
+      <div className="hidden md:flex w-full md:w-1/2 p-6 pt-28">
         <div className="w-full h-full bg-slate-900 rounded-2xl overflow-hidden relative flex flex-col justify-end p-12 shadow-2xl">
           <img src="/office.png" alt="Office environment" className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay" />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent"></div>

@@ -3,7 +3,7 @@ import { Search, Briefcase } from 'lucide-react';
 
 const About = () => {
   return (
-    <div className="bg-white min-h-screen pt-24 pb-16 px-6">
+    <div className="bg-white min-h-screen pt-28 pb-16 px-6">
       <div className="max-w-7xl mx-auto">
 
         {/* Hero Section */}

@@ -8,6 +8,9 @@ import Auth from './components/Auth';
 import EmployerDashboard from './components/employer/EmployerDashboard';
 import AgentDashboard from './components/agent/AgentDashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
+import TrustSafety from './components/TrustSafety';
 import Footer from './components/Footer';
 import { JobProvider } from './context/JobContext';
 import './App.css';
@@ -44,6 +47,9 @@ function AppContent() {
           <Route path="/agent/dashboard" element={<AgentDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/safety" element={<TrustSafety />} />
         </Routes>
       </div>
       {!isConsoleRoute && <Footer />}

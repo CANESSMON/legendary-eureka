@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -33,9 +34,9 @@ const Footer = () => {
         <div className="pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center">
           <p className="mb-4 md:mb-0">© {new Date().getFullYear()} JobPortal India. All rights reserved.</p>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-primary transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-primary transition-colors">Trust & Safety</a>
+            <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
+            <Link to="/safety" className="hover:text-primary transition-colors">Trust & Safety</Link>
           </div>
         </div>
       </div>

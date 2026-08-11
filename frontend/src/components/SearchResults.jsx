@@ -350,7 +350,7 @@ const SearchResults = () => {
   }));
 
   return (
-    <div className="bg-slate-50 min-h-screen pt-24 pb-16 px-6">
+    <div className="bg-slate-50 min-h-screen pt-28 pb-16 px-6">
       <div className="max-w-7xl mx-auto flex flex-col gap-6">
 
         {/* Header Section */}
