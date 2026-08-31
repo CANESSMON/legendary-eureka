@@ -1,0 +1,224 @@
+{
+  "schema": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 1
+    },
+    {
+      "cid": 1,
+      "name": "name",
+      "type": "TEXT",
+      "notnull": 1,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 2,
+      "name": "ascii_name",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 3,
+      "name": "city",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 4,
+      "name": "district",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 5,
+      "name": "state",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 6,
+      "name": "pincode",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 7,
+      "name": "type",
+      "type": "TEXT",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 8,
+      "name": "lat",
+      "type": "REAL",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 9,
+      "name": "lon",
+      "type": "REAL",
+      "notnull": 0,
+      "dflt_value": null,
+      "pk": 0
+    },
+    {
+      "cid": 10,
+      "name": "population",
+      "type": "INTEGER",
+      "notnull": 0,
+      "dflt_value": "0",
+      "pk": 0
+    }
+  ],
+  "sample": [
+    {
+      "id": 1275339,
+      "name": "Mumbai",
+      "ascii_name": "Mumbai",
+      "city": "",
+      "district": "",
+      "state": "State of Maharashtra",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 19.07283,
+      "lon": 72.88261,
+      "population": 12691836
+    },
+    {
+      "id": 1273294,
+      "name": "Delhi",
+      "ascii_name": "Delhi",
+      "city": "",
+      "district": "",
+      "state": "National Capital Territory of Delhi",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 28.65195,
+      "lon": 77.23149,
+      "population": 11034555
+    },
+    {
+      "id": 1277333,
+      "name": "Bengaluru",
+      "ascii_name": "Bengaluru",
+      "city": "Bangalore Urban",
+      "district": "Bangalore Urban",
+      "state": "State of Karnataka",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 12.97194,
+      "lon": 77.59369,
+      "population": 8495492
+    },
+    {
+      "id": 1269843,
+      "name": "Hyderabad",
+      "ascii_name": "Hyderabad",
+      "city": "Hyderabad",
+      "district": "Hyderabad",
+      "state": "State of Telangana",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 17.38405,
+      "lon": 78.45636,
+      "population": 6993262
+    },
+    {
+      "id": 1279233,
+      "name": "Ahmedabad",
+      "ascii_name": "Ahmedabad",
+      "city": "Ahmadabad",
+      "district": "Ahmadabad",
+      "state": "State of Gujarat",
+      "pincode": null,
+      "type": "populated_place",
+      "lat": 23.02579,
+      "lon": 72.58727,
+      "population": 6357693
+    },
+    {
+      "id": 1264527,
+      "name": "Chennai",
+      "ascii_name": "Chennai",
+      "city": "Chennai",
+      "district": "Chennai",
+      "state": "State of Tamil Nadu",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 13.08784,
+      "lon": 80.27847,
+      "population": 4681087
+    },
+    {
+      "id": 1275004,
+      "name": "Kolkata",
+      "ascii_name": "Kolkata",
+      "city": "Kolkata",
+      "district": "Kolkata",
+      "state": "West Bengal",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 22.56263,
+      "lon": 88.36304,
+      "population": 4631392
+    },
+    {
+      "id": 1255364,
+      "name": "Surat",
+      "ascii_name": "Surat",
+      "city": "Surat",
+      "district": "Surat",
+      "state": "State of Gujarat",
+      "pincode": null,
+      "type": "populated_place",
+      "lat": 21.19594,
+      "lon": 72.83023,
+      "population": 4591246
+    },
+    {
+      "id": 1259229,
+      "name": "Pune",
+      "ascii_name": "Pune",
+      "city": "Pune Division",
+      "district": "Pune Division",
+      "state": "State of Maharashtra",
+      "pincode": null,
+      "type": "populated_place",
+      "lat": 18.51957,
+      "lon": 73.85535,
+      "population": 3124458
+    },
+    {
+      "id": 1269515,
+      "name": "Jaipur",
+      "ascii_name": "Jaipur",
+      "city": "Jaipur",
+      "district": "Jaipur",
+      "state": "State of Rajasthan",
+      "pincode": null,
+      "type": "admin_center",
+      "lat": 26.91962,
+      "lon": 75.78781,
+      "population": 3046163
+    }
+  ]
+}
