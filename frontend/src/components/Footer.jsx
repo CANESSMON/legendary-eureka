@@ -7,9 +7,9 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="col-span-1 md:col-span-2">
-            <h3 className="h3 mb-4 text-slate-900">JobPortal India</h3>
+            <h3 className="h3 mb-4 text-slate-900">Moolu</h3>
             <p className="max-w-md text-slate-600 mb-6">
-              Empowering the Indian workforce by connecting top talent with the best local and national opportunities. From metro cities to emerging hubs, find your next big career move here.
+              Empowering the workforce by connecting top talent with the best local and national opportunities through moolu.in.
             </p>
             <p className="font-semibold text-primary">Made with ❤️ in India</p>
           </div>
@@ -32,7 +32,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center">
-          <p className="mb-4 md:mb-0">© {new Date().getFullYear()} JobPortal India. All rights reserved.</p>
+          <p className="mb-4 md:mb-0">© {new Date().getFullYear()} Moolu. All rights reserved.</p>
           <div className="flex gap-6">
             <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
