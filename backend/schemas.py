@@ -73,6 +73,94 @@ def validate_referral_code(v: Optional[str]) -> Optional[str]:
         raise ValueError('Referral code must contain only letters, numbers, and hyphens')
     return v
 
+def validate_company_name(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if len(v) < 2:
+        raise ValueError('Company name must be at least 2 characters long')
+    if len(v) > 100:
+        raise ValueError('Company name must not exceed 100 characters')
+    if re.search(r'<[^>]+>', v):
+        raise ValueError('Company name must not contain HTML tags')
+    return v
+
+def validate_establishment_year(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if not re.match(r'^\d{4}$', v):
+        raise ValueError('Establishment year must be a valid 4-digit numeric year (e.g. 2016)')
+    current_year = datetime.now().year
+    year_int = int(v)
+    if year_int < 1800 or year_int > current_year:
+        raise ValueError(f'Establishment year must be between 1800 and {current_year}')
+    return v
+
+def validate_logo_url(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    v_lower = v.lower()
+    if not (v_lower.startswith('http://') or v_lower.startswith('https://')):
+        raise ValueError('Please enter a valid HTTPS image URL')
+    if re.search(r'javascript:|data:|vbscript:', v_lower):
+        raise ValueError('Invalid or unsafe URL scheme')
+    # SSRF protection
+    host_match = re.search(r'https?://([^/:\?#]+)', v_lower)
+    if host_match:
+        host = host_match.group(1).strip()
+        if host in ('localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254', '[::1]', '::1') or \
+           re.match(r'^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$', host) or \
+           re.match(r'^192\.168\.\d{1,3}\.\d{1,3}$', host) or \
+           re.match(r'^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$', host) or \
+           re.match(r'^169\.254\.\d{1,3}\.\d{1,3}$', host):
+            raise ValueError('Internal/localhost URLs are not allowed')
+    # File type validation
+    path_part = v_lower.split('?')[0].split('#')[0]
+    if re.search(r'\.(pdf|doc|docx|exe|zip|rar|txt|html|php|bin|tar|gz|mp4|mp3)$', path_part):
+        raise ValueError('Image URL must point to an image file (.jpg, .png, .webp, .svg, etc.), not a PDF or non-image document')
+    return v
+
+def validate_city_name(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if len(v) < 2:
+        raise ValueError('Please enter a valid city name')
+    if len(v) > 100:
+        raise ValueError('City name must not exceed 100 characters')
+    if re.search(r'<[^>]+>', v):
+        raise ValueError('City name must not contain HTML tags')
+    if not re.search(r'[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú]', v):
+        raise ValueError('Please enter a valid city name')
+    if not re.match(r"^[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú\s\-'.]+$", v) or re.match(r"^[\-'.\s]+$", v):
+        raise ValueError('Please enter a valid city name')
+    return v
+
+def validate_address(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if len(v) < 5:
+        raise ValueError('Please enter a valid address (minimum 5 characters)')
+    if len(v) > 255:
+        raise ValueError('Address must not exceed 255 characters')
+    if re.search(r'<[^>]+>', v) or re.search(r'<script', v, re.IGNORECASE):
+        raise ValueError('Address must not contain HTML or script tags')
+    return v
+
+def validate_phone_number(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if re.search(r'<[^>]+>', v) or re.search(r'<script', v, re.IGNORECASE):
+        raise ValueError('Phone number must not contain HTML or script tags')
+    clean = re.sub(r'[\s\-\(\)]', '', v)
+    if not re.match(r'^\+?[0-9]{7,15}$', clean):
+        raise ValueError('Please enter a valid phone number (e.g. +919876543210)')
+    return v
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -99,6 +187,21 @@ class UserCreate(BaseModel):
     @classmethod
     def check_full_name(cls, v):
         return validate_full_name(v)
+
+    @field_validator('company_name')
+    @classmethod
+    def check_company_name(cls, v):
+        return validate_company_name(v)
+
+    @field_validator('city')
+    @classmethod
+    def check_city(cls, v):
+        return validate_city_name(v)
+
+    @field_validator('whatsapp_number')
+    @classmethod
+    def check_whatsapp_number(cls, v):
+        return validate_phone_number(v)
 
     @field_validator('referral_code')
     @classmethod
@@ -153,6 +256,43 @@ class EmployerProfileUpdate(BaseModel):
     address: Optional[str] = None
     whatsappNumber: Optional[str] = None
     defaultMessage: Optional[str] = None
+
+    @field_validator('fullName')
+    @classmethod
+    def check_full_name(cls, v):
+        if v is None or v.strip() == '':
+            return v
+        return validate_full_name(v)
+
+    @field_validator('companyName')
+    @classmethod
+    def check_company_name(cls, v):
+        return validate_company_name(v)
+
+    @field_validator('establishmentYear')
+    @classmethod
+    def check_establishment_year(cls, v):
+        return validate_establishment_year(v)
+
+    @field_validator('logo')
+    @classmethod
+    def check_logo_url(cls, v):
+        return validate_logo_url(v)
+
+    @field_validator('city')
+    @classmethod
+    def check_city(cls, v):
+        return validate_city_name(v)
+
+    @field_validator('address')
+    @classmethod
+    def check_address(cls, v):
+        return validate_address(v)
+
+    @field_validator('whatsappNumber')
+    @classmethod
+    def check_whatsapp_number(cls, v):
+        return validate_phone_number(v)
 
 class JobCategoryResponse(BaseModel):
     id: str
@@ -269,6 +409,16 @@ class JobPostingCreate(BaseModel):
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     salary_period: Optional[str] = "year"
+
+    @field_validator('company')
+    @classmethod
+    def check_company(cls, v):
+        return validate_company_name(v)
+
+    @field_validator('location')
+    @classmethod
+    def check_location(cls, v):
+        return validate_city_name(v)
 
 class JobPostingResponse(BaseModel):
     id: str

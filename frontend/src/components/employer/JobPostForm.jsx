@@ -574,9 +574,46 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) {
-      alert('Please enter a Job Title');
+      setErrorBanner('Please enter a Job Title');
       return;
     }
+
+    // Company validation
+    const compVal = formData.company.trim();
+    if (!compVal) {
+      setErrorBanner('Please enter a Company Name');
+      return;
+    }
+    if (compVal.length < 2 || compVal.length > 100) {
+      setErrorBanner('The Company Name field should allow a maximum of 100 characters only');
+      return;
+    }
+    if (/<[^>]+>/.test(compVal)) {
+      setErrorBanner('Company Name must not contain HTML tags');
+      return;
+    }
+
+    // Location / City validation
+    const locVal = formData.location.trim();
+    if (!locVal || locVal.length < 2 || !/[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú]/.test(locVal) || /^[\-'.\s]+$/.test(locVal) || /^\d+$/.test(locVal)) {
+      setErrorBanner('Please enter a valid city name');
+      return;
+    }
+
+    // WhatsApp Number validation
+    const phoneVal = formData.whatsappNumber.trim();
+    if (phoneVal) {
+      if (/<[^>]+>|<script/i.test(phoneVal)) {
+        setErrorBanner('Please enter a valid phone number');
+        return;
+      }
+      const cleanPhone = phoneVal.replace(/[\s\-\(\)]/g, '');
+      if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+        setErrorBanner('Please enter a valid phone number');
+        return;
+      }
+    }
+
     const descWords = formData.description.trim() === '' ? 0 : formData.description.trim().split(/\s+/).length;
     if (descWords > 50) {
       setErrorBanner('Job description cannot exceed 50 words.');
@@ -694,7 +731,7 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                 <label style={s.fieldLabel}>Company Name <span style={s.required}>*</span></label>
                 <div style={s.inputWrapper}>
                   <Building2 size={15} style={s.inputIcon} />
-                  <input type="text" name="company" value={formData.company} onChange={handleChange} placeholder="e.g. LogiStare Logistics" style={s.input} onFocus={focusIn} onBlur={focusOut} />
+                  <input type="text" name="company" value={formData.company} onChange={handleChange} maxLength={100} placeholder="e.g. LogiStare Logistics" style={s.input} onFocus={focusIn} onBlur={focusOut} />
                 </div>
               </div>
             </div>

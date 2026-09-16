@@ -28,6 +28,7 @@ const CompanyProfile = () => {
   });
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Calculate completion percentage
   const fields = [formData.fullName, formData.companyName, formData.logo, formData.establishmentYear, formData.city, formData.address, formData.whatsappNumber];
@@ -37,10 +38,126 @@ const CompanyProfile = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const validate = () => {
+    const errors = {};
+
+    // 1 & 3: Contact Person Full Name
+    const fullNameVal = formData.fullName.trim();
+    if (!fullNameVal) {
+      errors.fullName = 'Contact person full name is required';
+    } else if (fullNameVal.length < 2) {
+      errors.fullName = 'Full name must be at least 2 characters long';
+    } else if (fullNameVal.length > 100) {
+      errors.fullName = 'Full name must not exceed 100 characters';
+    } else if (/\d/.test(fullNameVal)) {
+      errors.fullName = 'Please enter a valid full name (numeric characters are not allowed)';
+    } else if (!/^[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú\s\-'.]+$/.test(fullNameVal)) {
+      errors.fullName = 'Full name contains invalid characters';
+    }
+
+    // 2: Company Name
+    const companyVal = formData.companyName.trim();
+    if (!companyVal) {
+      errors.companyName = 'Company name is required';
+    } else if (companyVal.length < 2) {
+      errors.companyName = 'Company name must be at least 2 characters long';
+    } else if (companyVal.length > 100) {
+      errors.companyName = 'The Company Name field should allow a maximum of 100 characters only';
+    } else if (/<[^>]+>/.test(companyVal)) {
+      errors.companyName = 'Company name must not contain HTML tags';
+    }
+
+    // 4: Establishment Year
+    const yearVal = formData.establishmentYear.trim();
+    const currentYear = new Date().getFullYear();
+    if (yearVal) {
+      if (!/^\d{4}$/.test(yearVal)) {
+        errors.establishmentYear = 'Please enter a valid 4-digit numeric year (e.g. 2016)';
+      } else {
+        const yNum = parseInt(yearVal, 10);
+        if (yNum < 1800 || yNum > currentYear) {
+          errors.establishmentYear = `Establishment year must be between 1800 and ${currentYear}`;
+        }
+      }
+    }
+
+    // 5, 6, 7: Custom Logo URL
+    const logoVal = formData.logo.trim();
+    if (logoVal) {
+      const lowerLogo = logoVal.toLowerCase();
+      if (!lowerLogo.startsWith('http://') && !lowerLogo.startsWith('https://')) {
+        errors.logo = 'Please enter a valid HTTPS image URL';
+      } else if (/javascript:|data:|vbscript:/.test(lowerLogo)) {
+        errors.logo = 'Please enter a valid HTTPS image URL';
+      } else {
+        try {
+          const parsed = new URL(lowerLogo);
+          const host = parsed.hostname.toLowerCase();
+          if (
+            host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '169.254.169.254' || host === '::1' ||
+            /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) || /^169\.254\./.test(host)
+          ) {
+            errors.logo = 'Internal, loopback, or localhost URLs are not allowed';
+          }
+        } catch (_) {}
+        const cleanPath = lowerLogo.split('?')[0].split('#')[0];
+        if (/\.(pdf|doc|docx|exe|zip|rar|txt|html|php|bin|tar|gz|mp4|mp3)$/.test(cleanPath)) {
+          errors.logo = 'Please enter a valid image URL (.jpg, .png, .webp, .svg). Non-image files like .pdf are rejected';
+        }
+      }
+    }
+
+    // 8 & 9: City Name
+    const cityVal = formData.city.trim();
+    if (!cityVal) {
+      errors.city = 'Please enter a valid city name';
+    } else if (cityVal.length < 2) {
+      errors.city = 'Please enter a valid city name';
+    } else if (cityVal.length > 100) {
+      errors.city = 'City name must not exceed 100 characters';
+    } else if (!/[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú]/.test(cityVal) || /^[\-'.\s]+$/.test(cityVal) || /^\d+$/.test(cityVal)) {
+      errors.city = 'Please enter a valid city name';
+    }
+
+    // 10 & 11: Address
+    const addressVal = formData.address.trim();
+    if (addressVal) {
+      if (addressVal.length < 5) {
+        errors.address = 'Please enter a valid address';
+      } else if (addressVal.length > 255) {
+        errors.address = 'Address must not exceed 255 characters';
+      } else if (/<[^>]+>|<script/i.test(addressVal)) {
+        errors.address = 'Address field must not contain HTML or <script> tags';
+      }
+    }
+
+    // 12: Primary WhatsApp / Phone Number
+    const phoneVal = formData.whatsappNumber.trim();
+    if (!phoneVal) {
+      errors.whatsappNumber = 'Please enter a valid phone number';
+    } else if (/<[^>]+>|<script/i.test(phoneVal)) {
+      errors.whatsappNumber = 'Please enter a valid phone number';
+    } else {
+      const cleanPhone = phoneVal.replace(/[\s\-\(\)]/g, '');
+      if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+        errors.whatsappNumber = 'Please enter a valid phone number';
+      }
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!validate()) {
+      return;
+    }
     updateEmployerProfile(formData);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -113,9 +230,12 @@ const CompanyProfile = () => {
                   onChange={handleChange}
                   placeholder="e.g. Rajesh Sharma"
                   required
-                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+                  className={`w-full pl-9 pr-4 py-2 rounded-xl border ${fieldErrors.fullName ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900`}
                 />
               </div>
+              {fieldErrors.fullName && (
+                <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.fullName}</p>
+              )}
             </div>
 
             <div>
@@ -129,11 +249,15 @@ const CompanyProfile = () => {
                   name="companyName"
                   value={formData.companyName}
                   onChange={handleChange}
+                  maxLength={100}
                   placeholder="e.g. Tech Solutions Pvt Ltd"
                   required
-                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+                  className={`w-full pl-9 pr-4 py-2 rounded-xl border ${fieldErrors.companyName ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900`}
                 />
               </div>
+              {fieldErrors.companyName && (
+                <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.companyName}</p>
+              )}
             </div>
           </div>
 
@@ -149,10 +273,14 @@ const CompanyProfile = () => {
                   name="establishmentYear"
                   value={formData.establishmentYear}
                   onChange={handleChange}
+                  maxLength={4}
                   placeholder="e.g. 2016"
-                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+                  className={`w-full pl-9 pr-4 py-2 rounded-xl border ${fieldErrors.establishmentYear ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900`}
                 />
               </div>
+              {fieldErrors.establishmentYear && (
+                <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.establishmentYear}</p>
+              )}
             </div>
 
             <div>
@@ -188,7 +316,10 @@ const CompanyProfile = () => {
                 <button
                   key={i}
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, logo: url }))}
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, logo: url }));
+                    if (fieldErrors.logo) setFieldErrors(prev => ({ ...prev, logo: null }));
+                  }}
                   className={`w-12 h-12 rounded-xl border-2 overflow-hidden transition-all cursor-pointer ${
                     formData.logo === url ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-slate-200 opacity-70 hover:opacity-100'
                   }`}
@@ -200,13 +331,16 @@ const CompanyProfile = () => {
             </div>
 
             <input
-              type="url"
+              type="text"
               name="logo"
               value={formData.logo}
               onChange={handleChange}
               placeholder="Paste custom logo image URL..."
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+              className={`w-full px-3 py-2 rounded-xl border ${fieldErrors.logo ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900`}
             />
+            {fieldErrors.logo && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.logo}</p>
+            )}
           </div>
         </div>
 
@@ -229,8 +363,11 @@ const CompanyProfile = () => {
                 onChange={handleChange}
                 placeholder="e.g. Bangalore"
                 required
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+                className={`w-full px-3 py-2 rounded-xl border ${fieldErrors.city ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900`}
               />
+              {fieldErrors.city && (
+                <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.city}</p>
+              )}
             </div>
 
             <div className="md:col-span-2">
@@ -243,8 +380,11 @@ const CompanyProfile = () => {
                 value={formData.address}
                 onChange={handleChange}
                 placeholder="e.g. Plot 42, Electronic City Phase 1, Bangalore"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
+                className={`w-full px-3 py-2 rounded-xl border ${fieldErrors.address ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900`}
               />
+              {fieldErrors.address && (
+                <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.address}</p>
+              )}
             </div>
           </div>
         </div>
@@ -270,9 +410,12 @@ const CompanyProfile = () => {
                   onChange={handleChange}
                   placeholder="e.g. +919876543210"
                   required
-                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-emerald-950 bg-white"
+                  className={`w-full pl-9 pr-4 py-2 rounded-xl border ${fieldErrors.whatsappNumber ? 'border-rose-500 ring-2 ring-rose-500/10' : 'border-emerald-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-emerald-950 bg-white`}
                 />
               </div>
+              {fieldErrors.whatsappNumber && (
+                <p className="text-[11px] font-semibold text-rose-600 mt-1">{fieldErrors.whatsappNumber}</p>
+              )}
             </div>
 
             <div>
