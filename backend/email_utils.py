@@ -53,11 +53,14 @@ def send_otp_email(to_email: str, otp: str, purpose: str):
     msg.attach(part)
     
     try:
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.ehlo()
-        if SMTP_PORT == 587:
-            server.starttls()
+        if SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
             server.ehlo()
+            if SMTP_PORT == 587:
+                server.starttls()
+                server.ehlo()
         server.login(SMTP_USER, SMTP_PASS)
         server.sendmail(SMTP_USER, to_email, msg.as_string())
         server.quit()
@@ -114,11 +117,14 @@ def send_reset_password_email(to_email: str, otp_code: str):
     msg.attach(part)
     
     try:
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.ehlo()
-        if SMTP_PORT == 587:
-            server.starttls()
+        if SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
             server.ehlo()
+            if SMTP_PORT == 587:
+                server.starttls()
+                server.ehlo()
         server.login(SMTP_USER, SMTP_PASS)
         server.sendmail(SMTP_USER, to_email, msg.as_string())
         server.quit()
