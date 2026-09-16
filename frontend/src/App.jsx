@@ -41,6 +41,8 @@ function AppContent() {
           <Route path="/about" element={<About />} />
           <Route path="/jobs" element={<SearchResults />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/login" element={<Auth initialMode="login" />} />
+          <Route path="/register" element={<Auth initialMode="register" />} />
           <Route path="/employer" element={<EmployerDashboard />} />
           <Route path="/employer/dashboard" element={<EmployerDashboard />} />
           <Route path="/agent" element={<AgentDashboard />} />

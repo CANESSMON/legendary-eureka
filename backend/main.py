@@ -105,9 +105,29 @@ try:
 finally:
     db_seed.close()
 
-app = FastAPI(title="JobPortal API")
+from config import CORS_ORIGINS, SECRET_KEY, ALGORITHM, ENABLE_DOCS
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.responses import JSONResponse
+from fastapi import Request
 
-from config import CORS_ORIGINS, SECRET_KEY, ALGORITHM
+app = FastAPI(
+    title="JobPortal API",
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None
+)
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 405:
+        return JSONResponse(
+            status_code=405,
+            content={"detail": "Method Not Allowed"}
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -118,6 +138,11 @@ app.add_middleware(
 )
 
 app.include_router(admin_router)
+
+@app.get("/api/categories", response_model=List[schemas.JobCategoryResponse])
+def get_categories_alias(db: Session = Depends(get_db)):
+    """Public alias endpoint for categories list."""
+    return db.query(models.JobCategory).all()
 
 import bcrypt
 import sqlite3
@@ -360,6 +385,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         agent = None
         if user.referral_code:
             agent = db.query(models.AgentProfile).filter(models.AgentProfile.referral_code == user.referral_code).first()
+            if not agent:
+                raise HTTPException(status_code=400, detail="Invalid referral code. Please check the code and try again, or leave it blank.")
         
         employer = models.EmployerProfile(
             user_id=new_user.id,
@@ -474,12 +501,108 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/forgot-password")
 def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
-    return {"message": "Password reset link sent successfully"}
+    """Send a password reset OTP to the user's email if the account exists.
+    Always returns a generic success message to prevent account enumeration."""
+    email_lower = request.email.lower().strip()
+    db_user = db.query(models.User).filter(models.User.email == email_lower).first()
+    
+    if db_user:
+        # Generate and save reset OTP
+        otp_code = f"{random.randint(100000, 999999)}"
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+        
+        # Clear older OTPs for this email with reset purpose
+        db.query(models.OTPVerification).filter(
+            models.OTPVerification.email == email_lower,
+            models.OTPVerification.purpose == "password_reset"
+        ).delete()
+        
+        db_otp = models.OTPVerification(
+            email=email_lower,
+            otp_code=otp_code,
+            purpose="password_reset",
+            expires_at=expires_at
+        )
+        db.add(db_otp)
+        db.commit()
+        
+        # Send email via SMTP
+        from email_utils import send_reset_password_email
+        send_reset_password_email(email_lower, otp_code)
+        
+        log_activity(
+            db=db,
+            action="password_reset_requested",
+            details=f"Password reset OTP sent to: '{email_lower}'",
+            user=db_user,
+            entity_type="user",
+            entity_id=db_user.id
+        )
+    
+    # Always return generic message to prevent account enumeration
+    return {"message": "If an account exists with this email address, a password reset code has been sent."}
+
+
+class ResetPasswordRequest(schemas.BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
+@app.post("/api/auth/reset-password")
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Verify the password reset OTP and update the user's password."""
+    email_lower = request.email.lower().strip()
+    
+    # Validate new password
+    new_pw = request.new_password.strip()
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+    if len(new_pw) > 128:
+        raise HTTPException(status_code=400, detail="Password must not exceed 128 characters")
+    
+    # Verify OTP
+    db_otp = db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == email_lower,
+        models.OTPVerification.otp_code == request.otp.strip(),
+        models.OTPVerification.purpose == "password_reset",
+        models.OTPVerification.expires_at > datetime.now(timezone.utc)
+    ).first()
+    
+    if not db_otp:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+    
+    # Find user
+    db_user = db.query(models.User).filter(models.User.email == email_lower).first()
+    if not db_user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+    
+    # Update password
+    db_user.password_hash = get_password_hash(new_pw)
+    
+    # Clean up OTP
+    db.delete(db_otp)
+    db.commit()
+    
+    log_activity(
+        db=db,
+        action="password_reset_completed",
+        details=f"Password reset completed for: '{email_lower}'",
+        user=db_user,
+        entity_type="user",
+        entity_id=db_user.id
+    )
+    
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}
 
 from typing import Optional
+from fastapi import Query
 
 @app.get("/api/locations/resolve")
-def resolve_location_endpoint(q: str = ""):
+def resolve_location_endpoint(
+    q: str = "",
+    lat: Optional[float] = Query(None, ge=-90.0, le=90.0, description="Latitude between -90 and 90"),
+    lon: Optional[float] = Query(None, ge=-180.0, le=180.0, description="Longitude between -180 and 180")
+):
     """Resolve a location query (area name, pincode, or structured address) to location data."""
     if not q.strip():
         return {"type": "empty", "area": "", "city": "", "district": "", "state": "", "pincode": "", "display": "India", "search_terms": []}

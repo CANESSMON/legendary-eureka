@@ -10,6 +10,9 @@ PG_ROOT_DATABASE_URL = os.getenv("PG_ROOT_DATABASE_URL", "postgresql://postgres:
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-for-job-portal")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
+# Enable OpenAPI / Swagger docs (default False in production for security)
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "false").lower() in ("true", "1")
+
 # Split comma-separated list of CORS origins
 cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174")
 CORS_ORIGINS = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]

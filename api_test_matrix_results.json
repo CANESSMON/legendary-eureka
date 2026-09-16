@@ -1,0 +1,173 @@
+[
+  {
+    "id": "TC-API-01",
+    "name": "Get Public Jobs List",
+    "endpoint": "GET /api/jobs",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "[{\"id\":\"a28439c7-e8ff-4d1d-86b4-98bccebec100\",\"reference_number\":\"JOB-ZHJZMS\",\"title\":\"test 4 \",\"company\":\"test emp\",\"location\":\"Bangalore\",\"salary\":\"\u20b910L - \u20b988L PA\",\"type\":\"Full-time\",\"category\":\"Information Technology (IT)\",\"description\":\"test 4\",\"requirements\":\"\",\"is_urgent\":true,\"is_featured\":tr",
+    "passed": true
+  },
+  {
+    "id": "TC-API-02",
+    "name": "Get Public Categories",
+    "endpoint": "GET /api/admin/categories/public",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "[{\"id\":\"6ae4cb77-0e87-4a63-a020-3e18372b29c7\",\"name\":\"Information Technology (IT)\"},{\"id\":\"ab44856e-5139-46db-993f-19f0645f1c93\",\"name\":\"Pharmaceuticals\"},{\"id\":\"c5022c6e-a496-4014-bac7-a493c85c3ef3\",\"name\":\"Supply Chain & Logistics\"},{\"id\":\"32f53490-b724-4562-8125-94e5320cad66\",\"name\":\"Finance & Ac",
+    "passed": true
+  },
+  {
+    "id": "TC-API-03",
+    "name": "Get Public Plans",
+    "endpoint": "GET /api/admin/plans/public",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "[{\"id\":\"starter\",\"name\":\"Starter Business\",\"tagline\":\"Ideal for small businesses & quick local hiring\",\"price\":\"Free\",\"period\":\"Forever Free\",\"features\":\"Post up to 3 active job listings\\nDirect candidate WhatsApp apply redirection\\nBasic candidate click lead analytics\\nStandard search placement\\nCo",
+    "passed": true
+  },
+  {
+    "id": "TC-API-04",
+    "name": "Suggest Locations (Query: Nagpur)",
+    "endpoint": "GET /api/locations/suggest",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "[{\"display\":\"Nagpur, Nagpur Division, Maharashtra\",\"value\":\"Nagpur, Nagpur Division, Maharashtra\"},{\"display\":\"K\u0101mthi, Nagpur Division, Maharashtra\",\"value\":\"K\u0101mthi, Nagpur Division, Maharashtra\"},{\"display\":\"W\u0101ri, Nagpur Division, Maharashtra\",\"value\":\"W\u0101ri, Nagpur Division, Maharashtra\"},{\"display",
+    "passed": true
+  },
+  {
+    "id": "TC-API-05",
+    "name": "Resolve Location (Coords)",
+    "endpoint": "GET /api/locations/resolve",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "{\"type\":\"empty\",\"area\":\"\",\"city\":\"\",\"district\":\"\",\"state\":\"\",\"pincode\":\"\",\"display\":\"India\",\"search_terms\":[]}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-01",
+    "name": "Unauthorized Admin Stats Access",
+    "endpoint": "GET /api/admin/stats",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-02",
+    "name": "Unauthorized Employers List Access",
+    "endpoint": "GET /api/admin/employers",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-03",
+    "name": "Unauthorized Agents List Access",
+    "endpoint": "GET /api/admin/agents",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-04",
+    "name": "Unauthorized Admin Activity Logs Access",
+    "endpoint": "GET /api/admin/logs",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-05",
+    "name": "Unauthorized Agent Stats Access",
+    "endpoint": "GET /api/agent/stats",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-06",
+    "name": "Unauthorized Agent Profile Access",
+    "endpoint": "GET /api/agent/profile",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-07",
+    "name": "Unauthorized Employer Profile Access",
+    "endpoint": "GET /api/employer/profile",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-SEC-08",
+    "name": "Unauthorized Employer Credits Access",
+    "endpoint": "GET /api/employer/credits",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Unauthorized\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-AUTH-admin",
+    "name": "Admin Login Parsing Error",
+    "endpoint": "POST /api/auth/login",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "{\"status\":\"otp_required\",\"email\":\"admin@jobportal.com\",\"message\":\"OTP verification code sent to your email\",\"access_token\":null,\"token_type\":null,\"user\":null}",
+    "passed": false
+  },
+  {
+    "id": "TC-AUTH-rajes",
+    "name": "Agent Login (Rajesh) Parsing Error",
+    "endpoint": "POST /api/auth/login",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "{\"status\":\"otp_required\",\"email\":\"rajesh.agent@jobportal.com\",\"message\":\"OTP verification code sent to your email\",\"access_token\":null,\"token_type\":null,\"user\":null}",
+    "passed": false
+  },
+  {
+    "id": "TC-AUTH-amit@",
+    "name": "Employer Login (Amit) Parsing Error",
+    "endpoint": "POST /api/auth/login",
+    "status_expected": 200,
+    "status_got": 200,
+    "detail": "{\"status\":\"otp_required\",\"email\":\"amit@apexinnovations.com\",\"message\":\"OTP verification code sent to your email\",\"access_token\":null,\"token_type\":null,\"user\":null}",
+    "passed": false
+  },
+  {
+    "id": "TC-AUTH-VAL1",
+    "name": "Invalid Credentials Rejection",
+    "endpoint": "POST /api/auth/login",
+    "status_expected": 401,
+    "status_got": 401,
+    "detail": "{\"detail\":\"Invalid credentials\"}",
+    "passed": true
+  },
+  {
+    "id": "TC-AUTH-VAL2",
+    "name": "Malformed Email Validation",
+    "endpoint": "POST /api/auth/login",
+    "status_expected": 422,
+    "status_got": 422,
+    "detail": "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"email\"],\"msg\":\"value is not a valid email address: An email address must have an @-sign.\",\"input\":\"bademailformat\",\"ctx\":{\"reason\":\"An email address must have an @-sign.\"}}]}",
+    "passed": true
+  },
+  {
+    "id": "TC-AUTH-REG1",
+    "name": "Short Password Registration Validation",
+    "endpoint": "POST /api/auth/register",
+    "status_expected": 422,
+    "status_got": 422,
+    "detail": "{\"detail\":[{\"type\":\"missing\",\"loc\":[\"body\",\"full_name\"],\"msg\":\"Field required\",\"input\":{\"email\":\"test_reg@test.com\",\"password\":\"short\"}}]}",
+    "passed": true
+  }
+]

@@ -182,19 +182,31 @@ def add_category(category: schemas.JobCategoryCreate, db: Session = Depends(get_
 def get_categories(db: Session = Depends(get_db)):
     return db.query(models.JobCategory).all()
 
+from sqlalchemy.exc import IntegrityError
+
 @router.delete("/categories/{category_id}")
 def delete_category(category_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_super_admin)):
     cat = db.query(models.JobCategory).filter(models.JobCategory.id == category_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
         
-    # Check if any job exists in this category
-    job_exists = db.query(models.JobPosting).filter(models.JobPosting.category == cat.name).first()
+    # Check if any job exists in this category (by category name or ID)
+    job_exists = db.query(models.JobPosting).filter(
+        (models.JobPosting.category == cat.name) | (models.JobPosting.category == cat.id)
+    ).first()
     if job_exists:
         raise HTTPException(status_code=400, detail="Cannot delete category: jobs exist in this category")
         
-    db.delete(cat)
-    db.commit()
+    try:
+        db.delete(cat)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Cannot delete category: database constraint violation (category in use)")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Failed to delete category: {str(e)}")
+
     log_activity(
         db=db,
         action="category_delete",

@@ -1,7 +1,77 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from models import RoleEnum
 from datetime import datetime
+import re
+
+# Weak password blocklist (common passwords that meet length requirements)
+WEAK_PASSWORDS = {
+    '12345678', '123456789', '1234567890', 'password', 'password1',
+    'qwerty123', 'admin123', 'welcome1', 'welcome123', 'letmein123',
+    'abc12345', 'abcd1234', 'iloveyou1', 'monkey123', 'dragon123',
+    'master123', 'qwerty12', 'login123', 'princess1', 'football1',
+}
+
+def validate_full_name(v: str) -> str:
+    v = v.strip()
+    if len(v) < 2:
+        raise ValueError('Full name must be at least 2 characters long')
+    if len(v) > 100:
+        raise ValueError('Full name must not exceed 100 characters')
+    # Block HTML tags
+    if re.search(r'<[^>]+>', v):
+        raise ValueError('Full name must not contain HTML tags')
+    # Block SQL injection patterns
+    sql_patterns = [
+        r"('\s*(OR|AND|DROP|SELECT|INSERT|UPDATE|DELETE|UNION|--|;))",
+        r'(DROP\s+TABLE|SELECT\s+\*|INSERT\s+INTO|DELETE\s+FROM)',
+    ]
+    for pattern in sql_patterns:
+        if re.search(pattern, v, re.IGNORECASE):
+            raise ValueError('Full name contains invalid characters')
+    # Allow only letters (ASCII and common accented), spaces, hyphens, apostrophes, periods
+    if not re.match(r"^[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú\s\-'.]+$", v):
+        raise ValueError('Full name must contain only letters, spaces, hyphens, apostrophes, or periods')
+    # Block emoji range
+    emoji_pattern = re.compile(
+        "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF"
+        "\U0001F1E0-\U0001F1FF\U00002702-\U000027B0\U0001F900-\U0001F9FF"
+        "\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002600-\U000026FF]+",
+        flags=re.UNICODE
+    )
+    if emoji_pattern.search(v):
+        raise ValueError('Full name must not contain emojis')
+    return v
+
+def validate_password(v: str) -> str:
+    # Trim leading/trailing whitespace only
+    v = v.strip()
+    if len(v) < 8:
+        raise ValueError('Password must be at least 8 characters long')
+    if len(v) > 128:
+        raise ValueError('Password must not exceed 128 characters')
+    if not re.search(r'[a-zA-Z]', v):
+        raise ValueError('Password must contain at least one letter')
+    if not re.search(r'[0-9]', v):
+        raise ValueError('Password must contain at least one number')
+    if v.lower() in WEAK_PASSWORDS:
+        raise ValueError('This password is too common. Please choose a stronger password')
+    return v
+
+def validate_email_length(v: str) -> str:
+    if len(v) > 254:
+        raise ValueError('Email address must not exceed 254 characters')
+    return v
+
+def validate_referral_code(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if len(v) > 20:
+        raise ValueError('Referral code must not exceed 20 characters')
+    if not re.match(r'^[a-zA-Z0-9\-]+$', v):
+        raise ValueError('Referral code must contain only letters, numbers, and hyphens')
+    return v
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -15,10 +85,46 @@ class UserCreate(BaseModel):
     referral_code: Optional[str] = None
     otp: Optional[str] = None
 
+    @field_validator('email')
+    @classmethod
+    def check_email_length(cls, v):
+        return validate_email_length(v)
+
+    @field_validator('password')
+    @classmethod
+    def check_password(cls, v):
+        return validate_password(v)
+
+    @field_validator('full_name')
+    @classmethod
+    def check_full_name(cls, v):
+        return validate_full_name(v)
+
+    @field_validator('referral_code')
+    @classmethod
+    def check_referral_code(cls, v):
+        return validate_referral_code(v)
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
     otp: Optional[str] = None
+
+    @field_validator('email')
+    @classmethod
+    def check_email_length(cls, v):
+        return validate_email_length(v)
+
+    @field_validator('password')
+    @classmethod
+    def check_password(cls, v):
+        v = v.strip()
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if len(v) > 128:
+            raise ValueError('Password must not exceed 128 characters')
+        return v
+
 
 
 class EmployerProfileResponse(BaseModel):

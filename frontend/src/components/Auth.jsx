@@ -1,13 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Briefcase, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useJobs } from '../context/JobContext';
 import { API_BASE_URL } from '../config';
 
-const Auth = () => {
+const parseErrorMessage = (detail, defaultMsg = 'An error occurred') => {
+  if (!detail) return defaultMsg;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((err) => {
+        if (typeof err === 'string') return err;
+        if (err.msg) return err.msg;
+        return JSON.stringify(err);
+      })
+      .join(', ');
+  }
+  if (typeof detail === 'object') {
+    if (detail.msg) return detail.msg;
+    if (detail.message) return detail.message;
+    return JSON.stringify(detail);
+  }
+  return String(detail);
+};
+
+const Auth = ({ initialMode }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useJobs();
-  const [isLogin, setIsLogin] = useState(true);
+
+  const [isLogin, setIsLogin] = useState(() => {
+    if (initialMode === 'register') return false;
+    if (initialMode === 'login') return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'register' || location.pathname.includes('/register')) return false;
+    return true;
+  });
+
+  useEffect(() => {
+    if (initialMode === 'register' || location.pathname.includes('/register')) {
+      setIsLogin(false);
+    } else if (initialMode === 'login' || location.pathname.includes('/login')) {
+      setIsLogin(true);
+    }
+  }, [initialMode, location.pathname]);
+
   const [accountType, setAccountType] = useState('employer');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
 
@@ -40,12 +77,14 @@ const Auth = () => {
   };
 
   const handleToggleMode = () => {
-    setIsLogin(!isLogin);
+    const newLoginMode = !isLogin;
+    setIsLogin(newLoginMode);
     setIsForgotPassword(false);
     setErrorMsg('');
     setSuccessMsg('');
     setOtpRequired(false);
     setOtp('');
+    navigate(newLoginMode ? '/login' : '/register', { replace: true });
   };
 
   const handleSubmit = async (e) => {
@@ -54,24 +93,26 @@ const Auth = () => {
     setSuccessMsg('');
     setLoading(true);
 
+    const trimmedEmail = email.trim();
+    const trimmedFullName = fullName.trim();
+    const trimmedReferral = referralCode.trim();
+
     try {
       if (isForgotPassword) {
         const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email: trimmedEmail })
         });
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.detail || 'Reset failed');
+          throw new Error(parseErrorMessage(data.detail, 'Reset failed'));
         }
 
-        setSuccessMsg('Password reset link has been sent to your email.');
-        setIsForgotPassword(false);
-        setIsLogin(true);
+        setSuccessMsg(data.message || 'If an account exists with this email address, a password reset link has been sent.');
       } else if (isLogin) {
-        const payload = { email, password };
+        const payload = { email: trimmedEmail, password };
         if (otpRequired) {
           payload.otp = otp;
         }
@@ -84,7 +125,7 @@ const Auth = () => {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.detail || 'Login failed');
+          throw new Error(parseErrorMessage(data.detail, 'Login failed'));
         }
 
         if (data.status === 'otp_required') {
@@ -98,23 +139,22 @@ const Auth = () => {
           login(data.access_token, data.user.role, data.user);
         }
 
-        // Redirect employer to dashboard, agent to agent dashboard, admin to admin dashboard, others to home page
-        if (data.user?.role === 'SUPER_USER' || email.toLowerCase().includes('admin')) {
+        if (data.user?.role === 'SUPER_USER' || trimmedEmail.toLowerCase().includes('admin')) {
           navigate('/admin');
-        } else if (data.user?.role === 'EMPLOYER' || email.toLowerCase().includes('employer')) {
+        } else if (data.user?.role === 'EMPLOYER' || trimmedEmail.toLowerCase().includes('employer')) {
           navigate('/employer');
-        } else if (data.user?.role === 'AGENT' || email.toLowerCase().includes('agent')) {
+        } else if (data.user?.role === 'AGENT' || trimmedEmail.toLowerCase().includes('agent')) {
           navigate('/agent');
         } else {
           navigate('/');
         }
       } else {
         const payload = {
-          email,
+          email: trimmedEmail,
           password,
-          full_name: fullName,
+          full_name: trimmedFullName,
           account_type: accountType,
-          ...(accountType === 'employer' && referralCode ? { referral_code: referralCode } : {})
+          ...(accountType === 'employer' && trimmedReferral ? { referral_code: trimmedReferral } : {})
         };
         if (otpRequired) {
           payload.otp = otp;
@@ -128,7 +168,7 @@ const Auth = () => {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.detail || 'Registration failed');
+          throw new Error(parseErrorMessage(data.detail, 'Registration failed'));
         }
 
         if (data.status === 'otp_required') {
@@ -321,7 +361,7 @@ const Auth = () => {
                     <input
                       type="text"
                       value={referralCode}
-                      onChange={(e) => setReferralCode(e.target.value)}
+                      onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
                       placeholder="e.g. AGENT-IND-123"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-sm text-slate-900 outline-none focus:border-primary focus:bg-white transition-colors"
                     />
