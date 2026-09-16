@@ -35,15 +35,17 @@ def seed():
     print("Seeding database …")
 
     # ── 1. Super Admin ───────────────────────────────────────────────────────
-    admin_user = models.User(
-        email=ADMIN["email"],
-        password_hash=get_password_hash(ADMIN["password"]),
-        full_name=ADMIN["full_name"],
-        role=models.RoleEnum.SUPER_USER,
-        created_at=datetime.now(timezone.utc) - timedelta(days=90),
-    )
-    db.add(admin_user)
-    db.flush()
+    admin_user = db.query(models.User).filter(models.User.email == ADMIN["email"]).first()
+    if not admin_user:
+        admin_user = models.User(
+            email=ADMIN["email"],
+            password_hash=get_password_hash(ADMIN["password"]),
+            full_name=ADMIN["full_name"],
+            role=models.RoleEnum.SUPER_USER,
+            created_at=datetime.now(timezone.utc) - timedelta(days=90),
+        )
+        db.add(admin_user)
+        db.flush()
 
     # ── 2. Agents ────────────────────────────────────────────────────────────
     agent_profiles = []   # indexed 0, 1 — matches EMPLOYERS[x]["agent_index"]
