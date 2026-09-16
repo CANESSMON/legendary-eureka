@@ -47,10 +47,12 @@ const Auth = ({ initialMode }) => {
 
   const [accountType, setAccountType] = useState('employer');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetStep, setResetStep] = useState(1); // 1: Send Code, 2: Verify Code, 3: Set New Password
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [referralCode, setReferralCode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('referral') || '';
@@ -63,13 +65,21 @@ const Auth = ({ initialMode }) => {
   const [otp, setOtp] = useState('');
 
   const getTitle = () => {
-    if (isForgotPassword) return 'Reset Password';
+    if (isForgotPassword) {
+      if (resetStep === 3) return 'Set New Password';
+      if (resetStep === 2) return 'Verify Reset Code';
+      return 'Reset Password';
+    }
     if (otpRequired) return 'Security Verification';
     return isLogin ? 'Welcome back' : 'Create an account';
   };
 
   const getSubtitle = () => {
-    if (isForgotPassword) return 'Enter your email to receive a password reset link.';
+    if (isForgotPassword) {
+      if (resetStep === 3) return 'Choose a new password for your account.';
+      if (resetStep === 2) return 'Enter the code sent to your email to verify your identity.';
+      return 'Enter your email to receive a password reset code.';
+    }
     if (otpRequired) return 'Enter the verification code sent to your email to verify your identity.';
     return isLogin
       ? 'Enter your details to access your workspace.'
@@ -80,10 +90,12 @@ const Auth = ({ initialMode }) => {
     const newLoginMode = !isLogin;
     setIsLogin(newLoginMode);
     setIsForgotPassword(false);
+    setResetStep(1);
     setErrorMsg('');
     setSuccessMsg('');
     setOtpRequired(false);
     setOtp('');
+    setNewPassword('');
     navigate(newLoginMode ? '/login' : '/register', { replace: true });
   };
 
@@ -99,18 +111,70 @@ const Auth = ({ initialMode }) => {
 
     try {
       if (isForgotPassword) {
-        const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: trimmedEmail })
-        });
-        const data = await response.json();
+        if (resetStep === 1) {
+          const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: trimmedEmail })
+          });
+          const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(parseErrorMessage(data.detail, 'Reset failed'));
+          if (!response.ok) {
+            throw new Error(parseErrorMessage(data.detail, 'Reset failed'));
+          }
+
+          setResetStep(2);
+          setSuccessMsg('');
+        } else if (resetStep === 2) {
+          if (!otp || otp.trim().length !== 6) {
+            throw new Error('Please enter the 6-digit reset code');
+          }
+
+          const response = await fetch(`${API_BASE_URL}/api/auth/verify-reset-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: trimmedEmail,
+              otp: otp.trim()
+            })
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(parseErrorMessage(data.detail, 'Invalid reset code'));
+          }
+
+          setResetStep(3);
+          setErrorMsg('');
+          setSuccessMsg('');
+        } else if (resetStep === 3) {
+          if (!newPassword || newPassword.trim().length < 8) {
+            throw new Error('Password must be at least 8 characters long');
+          }
+
+          const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: trimmedEmail,
+              otp: otp.trim(),
+              new_password: newPassword.trim()
+            })
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(parseErrorMessage(data.detail, 'Password reset failed'));
+          }
+
+          setSuccessMsg(data.message || 'Password has been reset successfully. You can now log in with your new password.');
+          setIsForgotPassword(false);
+          setResetStep(1);
+          setOtp('');
+          setNewPassword('');
+          setPassword('');
+          setIsLogin(true);
         }
-
-        setSuccessMsg(data.message || 'If an account exists with this email address, a password reset link has been sent.');
       } else if (isLogin) {
         const payload = { email: trimmedEmail, password };
         if (otpRequired) {
@@ -280,6 +344,97 @@ const Auth = ({ initialMode }) => {
                   </button>
                 </div>
               </div>
+            ) : isForgotPassword && resetStep === 2 ? (
+              <div className="animate-fade-in space-y-4">
+                <div className="text-center pb-1">
+                  <span className="text-xs text-slate-500 font-medium">Sent to: <strong className="text-slate-800 break-all">{email}</strong></span>
+                </div>
+                <div>
+                  <label className="form-label tracking-wider mb-2 block text-slate-500 text-center">Reset Code (OTP)</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    required
+                    placeholder=" XXXXXX"
+                    className="w-full text-center bg-slate-50 border border-slate-200 rounded-lg py-3 px-4 text-xl font-bold tracking-[0.5em] text-slate-900 outline-none focus:border-primary focus:bg-white transition-colors"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setOtp('');
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                      setLoading(true);
+                      try {
+                        const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: email.trim() })
+                        });
+                        const data = await response.json();
+                        if (!response.ok) {
+                          throw new Error(data.detail || 'Resend failed');
+                        }
+                        setSuccessMsg('A new reset code has been sent to your email.');
+                      } catch (err) {
+                        setErrorMsg(err.message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="text-primary hover:underline font-semibold bg-transparent border-0 cursor-pointer p-0"
+                  >
+                    Resend Code
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetStep(1);
+                      setOtp('');
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                    className="text-slate-500 hover:text-slate-700 bg-transparent border-0 cursor-pointer p-0 font-medium"
+                  >
+                    Change Email
+                  </button>
+                </div>
+              </div>
+            ) : isForgotPassword && resetStep === 3 ? (
+              <div className="animate-fade-in space-y-4">
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                  <span>✓ Reset code verified for <strong className="break-all">{email}</strong></span>
+                </div>
+
+                <div>
+                  <label className="form-label tracking-wider mb-2 block text-slate-500">New Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      placeholder="At least 8 characters"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 pl-4 pr-11 text-sm text-slate-900 outline-none focus:border-primary focus:bg-white transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-transparent border-0 cursor-pointer p-1 focus:outline-none flex items-center justify-center"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <Eye size={16} /> : <EyeOff size={16} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
               <>
                 {/* Full Name - Only on Sign Up */}
@@ -388,8 +543,20 @@ const Auth = ({ initialMode }) => {
             {/* Submit Button */}
             <div className="pt-2 animate-fade-in [animation-delay:200ms]">
               <button disabled={loading} type="submit" className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-3 rounded-lg transition-all font-bold tracking-wide shadow-sm shadow-primary/20 flex items-center justify-center gap-2 hover:-translate-y-0.5">
-                {loading ? 'Processing...' : (otpRequired ? 'Verify & Continue' : (isForgotPassword ? 'Send Reset Link' : (isLogin ? 'Sign In' : 'Create Account')))}
-                {!loading && !isForgotPassword && <ArrowRight size={18} />}
+                {loading
+                  ? 'Processing...'
+                  : otpRequired
+                  ? 'Verify & Continue'
+                  : isForgotPassword
+                  ? resetStep === 1
+                    ? 'Send Reset Code'
+                    : resetStep === 2
+                    ? 'Verify Code'
+                    : 'Set New Password'
+                  : isLogin
+                  ? 'Sign In'
+                  : 'Create Account'}
+                {!loading && (!isForgotPassword || resetStep !== 1) && <ArrowRight size={18} />}
               </button>
             </div>
           </form>
@@ -398,7 +565,14 @@ const Auth = ({ initialMode }) => {
           <div className="mt-8 text-center animate-fade-in [animation-delay:250ms]">
             {isForgotPassword ? (
               <span
-                onClick={() => setIsForgotPassword(false)}
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setResetStep(1);
+                  setOtp('');
+                  setNewPassword('');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
                 className="form-label text-primary hover:underline cursor-pointer font-bold tracking-wider flex items-center justify-center gap-1"
               >
                 <ArrowLeft size={14} /> Back to Log in

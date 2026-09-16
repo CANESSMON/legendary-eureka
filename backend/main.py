@@ -543,6 +543,27 @@ def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depend
     return {"message": "If an account exists with this email address, a password reset code has been sent."}
 
 
+class VerifyResetOTPRequest(schemas.BaseModel):
+    email: str
+    otp: str
+
+@app.post("/api/auth/verify-reset-otp")
+def verify_reset_otp(request: VerifyResetOTPRequest, db: Session = Depends(get_db)):
+    """Verify if the password reset OTP is valid and not expired."""
+    email_lower = request.email.lower().strip()
+    db_otp = db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == email_lower,
+        models.OTPVerification.otp_code == request.otp.strip(),
+        models.OTPVerification.purpose == "password_reset",
+        models.OTPVerification.expires_at > datetime.now(timezone.utc)
+    ).first()
+    
+    if not db_otp:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+    
+    return {"message": "Reset code verified successfully."}
+
+
 class ResetPasswordRequest(schemas.BaseModel):
     email: str
     otp: str
