@@ -30,84 +30,7 @@ const ClassifiedsGrid = ({
   };
   const columnClass = colsConfig[columnsCount] || colsConfig[5];
 
-  // 1. Pad listings with high-quality filler ads if there are fewer than 12 total listings
-  // to guarantee we cover all columns and fill the space completely.
   let displayedListings = [...listingsData];
-  if (displayedListings.length < 12) {
-    const needed = 12 - displayedListings.length;
-    const fillers = [
-      {
-        category: "Featured Services",
-        subCategory: "JobPortal Ads",
-        title: "Post Your Job Ad Here",
-        content: "Looking to hire quickly? Post your vacancy in our Classifieds section. Direct candidate replies straight to your WhatsApp!",
-        isUrgent: false,
-        isFeatured: true,
-        whatsappNumber: "+919876543210",
-        isFiller: true
-      },
-      {
-        category: "Career Support",
-        subCategory: "ResumeBuilder",
-        title: "Free Resume Review",
-        content: "Stand out in search results. Send your current CV via WhatsApp for a professional recruiter review and format upgrade.",
-        isUrgent: false,
-        isFeatured: false,
-        whatsappNumber: "+919876543210",
-        isFiller: true
-      },
-      {
-        category: "Skill Training",
-        subCategory: "CodeCamp India",
-        title: "React & Frontend Bootcamp",
-        content: "Learn modern React, Tailwind, and Node.js with live industry projects. 100% interview preparation and job referrals.",
-        isUrgent: true,
-        isFeatured: false,
-        whatsappNumber: "+919876543210",
-        isFiller: true
-      },
-      {
-        category: "Helpdesk",
-        subCategory: "JobPortal India",
-        title: "WhatsApp Alerts Subscription",
-        content: "Get daily job updates matching your skills directly in your WhatsApp inbox. Free forever service. Chat with us to subscribe.",
-        isUrgent: false,
-        isFeatured: false,
-        whatsappNumber: "+919876543210",
-        isFiller: true
-      },
-      {
-        category: "Freelance",
-        subCategory: "GigPortal",
-        title: "Remote Gig Seekers Wanted",
-        content: "Part-time transcription, data entry, and translation projects available. Flexible hours, daily payments. Inquire now.",
-        isUrgent: false,
-        isFeatured: false,
-        whatsappNumber: "+919876543210",
-        isFiller: true
-      },
-      {
-        category: "Business Opportunity",
-        subCategory: "Agent Program",
-        title: "Become a JobPortal Partner Agent",
-        content: "Refer local employers to post jobs and earn up to ₹500 commission per active posting. Sign up from your dashboard tab.",
-        isUrgent: false,
-        isFeatured: true,
-        whatsappNumber: "+919876543210",
-        isFiller: true
-      }
-    ];
-    
-    // Add only as many fillers as needed to hit 12 (using circular mod for safety)
-    const fillersToAdd = [];
-    for (let i = 0; i < needed; i++) {
-      fillersToAdd.push({
-        ...fillers[i % fillers.length],
-        id: `filler-${i}-${Date.now()}`
-      });
-    }
-    displayedListings = [...displayedListings, ...fillersToAdd];
-  }
 
   // Get distinct group headers (either classified_heading if present, or category if not)
   const groupNames = [...new Set(displayedListings.map(item => item.classified_heading || item.category))].filter(Boolean);
@@ -209,22 +132,17 @@ const ClassifiedsGrid = ({
                         
                         <div className="mt-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            {listing.postedDate && !listing.isFiller && (
+                            {listing.postedDate && (
                               <span className="text-[9px] font-mono text-slate-400">
                                 {listing.postedDate}
                               </span>
                             )}
-                            {listing.postedDate && !listing.isFiller && listing.reference_number && (
+                            {listing.postedDate && listing.reference_number && (
                               <span className="text-slate-300">•</span>
                             )}
                             {listing.reference_number && (
                               <span className="text-[9px] font-mono font-bold text-slate-400">
                                 Ref: {listing.reference_number}
-                              </span>
-                            )}
-                            {listing.isFiller && (
-                              <span className="text-[8px] text-slate-400 font-medium italic">
-                                Sponsored
                               </span>
                             )}
                           </div>
