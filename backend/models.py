@@ -112,11 +112,19 @@ class JobPosting(Base):
 
     employer = relationship("EmployerProfile", back_populates="jobs")
 
+    _whatsapp_number = Column("whatsapp_number", String, nullable=True)
+
     @property
     def whatsapp_number(self):
-        if self.employer:
+        if self._whatsapp_number and self._whatsapp_number.strip():
+            return self._whatsapp_number
+        if self.employer and self.employer.whatsapp_number:
             return self.employer.whatsapp_number
         return "+919876543210"
+
+    @whatsapp_number.setter
+    def whatsapp_number(self, value):
+        self._whatsapp_number = value
 
 EmployerProfile.jobs = relationship("JobPosting", back_populates="employer")
 
@@ -191,3 +199,11 @@ class PaymentTransaction(Base):
     employer = relationship("EmployerProfile", backref="transactions")
 
 
+class FailedLoginAttempt(Base):
+    __tablename__ = "failed_login_attempts"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    last_attempt_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

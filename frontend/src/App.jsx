@@ -11,6 +11,7 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
 import TrustSafety from './components/TrustSafety';
+import NotFound from './components/NotFound';
 import Footer from './components/Footer';
 import { JobProvider } from './context/JobContext';
 import './App.css';
@@ -25,17 +26,25 @@ function ScrollToTop() {
   return null;
 }
 
+const KNOWN_ROUTES = [
+  '/', '/about', '/jobs', '/auth', '/login', '/register',
+  '/employer', '/employer/dashboard', '/agent', '/agent/dashboard',
+  '/admin', '/admin/dashboard', '/privacy', '/terms', '/safety'
+];
+
 function AppContent() {
   const location = useLocation();
   const isEmployerRoute = location.pathname.startsWith('/employer');
   const isAgentRoute = location.pathname.startsWith('/agent');
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isConsoleRoute = isEmployerRoute || isAgentRoute || isAdminRoute;
+  const isKnownRoute = KNOWN_ROUTES.includes(location.pathname);
+  const showHeaderFooter = !isConsoleRoute && isKnownRoute;
 
   return (
     <div className="min-h-screen flex flex-col">
-      {!isConsoleRoute && <Navbar />}
-      <div className="flex-1">
+      {showHeaderFooter && <Navbar />}
+      <div className="flex-1 flex flex-col">
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/about" element={<About />} />
@@ -52,9 +61,10 @@ function AppContent() {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/safety" element={<TrustSafety />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
-      {!isConsoleRoute && <Footer />}
+      {showHeaderFooter && <Footer />}
     </div>
   );
 }

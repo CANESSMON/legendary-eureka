@@ -32,6 +32,8 @@ try:
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN salary_period VARCHAR(50) DEFAULT 'year';"))
         if 'used_paid_credit' not in columns:
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN used_paid_credit BOOLEAN DEFAULT FALSE;"))
+        if 'whatsapp_number' not in columns:
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN whatsapp_number VARCHAR(50) NULL;"))
         conn.commit()
         print("Database schema check/updates completed successfully!")
 except Exception as e:
@@ -119,6 +121,11 @@ app = FastAPI(
 
 @app.exception_handler(StarletteHTTPException)
 async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404 and request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "API endpoint not found. Please check the URI and request method."}
+        )
     if exc.status_code == 405:
         return JSONResponse(
             status_code=405,
@@ -432,8 +439,53 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 @app.post("/api/auth/login", response_model=schemas.AuthResponse)
 def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
     email_lower = user.email.lower().strip()
+    now = datetime.now(timezone.utc)
+
+    LOCKOUT_MESSAGE = "Too many failed login attempts. Your account has been temporarily locked for 1 minute. Please try again later."
+
+    # 0. Check lockout status for this email
+    lock_record = db.query(models.FailedLoginAttempt).filter(
+        models.FailedLoginAttempt.email == email_lower
+    ).first()
+
+    if lock_record and lock_record.locked_until:
+        locked_until_dt = lock_record.locked_until
+        if locked_until_dt.tzinfo is None:
+            locked_until_dt = locked_until_dt.replace(tzinfo=timezone.utc)
+
+        if now < locked_until_dt:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=LOCKOUT_MESSAGE
+            )
+        else:
+            # Lockout time has passed, reset state
+            lock_record.attempts = 0
+            lock_record.locked_until = None
+            db.commit()
+
     db_user = db.query(models.User).filter(models.User.email == email_lower).first()
     if not db_user or not verify_password(user.password, db_user.password_hash):
+        if not lock_record:
+            lock_record = models.FailedLoginAttempt(
+                email=email_lower,
+                attempts=1,
+                last_attempt_at=now
+            )
+            db.add(lock_record)
+        else:
+            lock_record.attempts += 1
+            lock_record.last_attempt_at = now
+
+        if lock_record.attempts >= 4:
+            lock_record.locked_until = now + timedelta(minutes=1)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=LOCKOUT_MESSAGE
+            )
+
+        db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     
     # 1. OTP Check
@@ -478,8 +530,11 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
     if not db_otp:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP verification code")
     
-    # OTP is valid, clean it up
+    # OTP is valid, clean it up and reset failed login attempts
     db.delete(db_otp)
+    if lock_record:
+        lock_record.attempts = 0
+        lock_record.locked_until = None
     db.commit()
     
     access_token = create_access_token(data={"sub": db_user.id, "email": db_user.email})

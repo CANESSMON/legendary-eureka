@@ -63,6 +63,20 @@ export const JobProvider = ({ children }) => {
     return 0;
   };
 
+  const extractErrorMessage = (errData) => {
+    if (!errData) return null;
+    if (typeof errData === 'string') return errData;
+    if (typeof errData.detail === 'string') return errData.detail;
+    if (Array.isArray(errData.detail)) {
+      return errData.detail.map(item => item.msg || JSON.stringify(item)).join('; ');
+    }
+    if (typeof errData.detail === 'object' && errData.detail !== null) {
+      return errData.detail.msg || errData.detail.message || JSON.stringify(errData.detail);
+    }
+    if (errData.message && typeof errData.message === 'string') return errData.message;
+    return null;
+  };
+
   const login = (newToken, newRole, newProfile) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('userRole', newRole);
@@ -421,7 +435,8 @@ export const JobProvider = ({ children }) => {
       classified_heading: newJobData.classified_heading || null,
       salary_min: newJobData.salary_min ? parseInt(newJobData.salary_min) : null,
       salary_max: newJobData.salary_max ? parseInt(newJobData.salary_max) : null,
-      salary_period: newJobData.salary_period || 'year'
+      salary_period: newJobData.salary_period || 'year',
+      whatsapp_number: newJobData.whatsappNumber || employerProfile.whatsappNumber || null
     };
 
     try {
@@ -452,11 +467,12 @@ export const JobProvider = ({ children }) => {
           views: job.views_count || 0,
           applicantsCount: job.applications_count || 0,
           applyClicks: job.applications_count || 0,
-          whatsappNumber: newJobData.whatsappNumber || employerProfile.whatsappNumber || '+919876543210',
+          whatsappNumber: job.whatsapp_number || newJobData.whatsappNumber || employerProfile.whatsappNumber || '+919876543210',
           whatsappMessage: newJobData.whatsappMessage || `Hi, I am interested in applying for ${job.title} at ${job.company} posted on JobPortal. Please share more details!`,
           postedDate: 'Just now',
           createdAt: job.created_at || new Date().toISOString(),
           applicants: [],
+          employerId: job.employer_id || employerProfile.id,
           classified_heading: job.classified_heading,
           salary_min: job.salary_min,
           salary_max: job.salary_max,
@@ -470,7 +486,7 @@ export const JobProvider = ({ children }) => {
         let errMsg = 'Failed to create job posting.';
         try {
           const errData = await response.json();
-          errMsg = errData.detail || errMsg;
+          errMsg = extractErrorMessage(errData) || errMsg;
         } catch (e) {}
         const error = new Error(errMsg);
         error.status = errStatus;
@@ -518,7 +534,8 @@ export const JobProvider = ({ children }) => {
       classified_heading: updatedData.classified_heading || null,
       salary_min: updatedData.salary_min ? parseInt(updatedData.salary_min) : null,
       salary_max: updatedData.salary_max ? parseInt(updatedData.salary_max) : null,
-      salary_period: updatedData.salary_period || 'year'
+      salary_period: updatedData.salary_period || 'year',
+      whatsapp_number: updatedData.whatsappNumber || employerProfile.whatsappNumber || null
     };
 
     try {
@@ -549,7 +566,7 @@ export const JobProvider = ({ children }) => {
                 isUrgent: job.is_urgent,
                 isFeatured: job.is_featured,
                 status: job.status || 'Active',
-                whatsappNumber: updatedData.whatsappNumber || j.whatsappNumber,
+                whatsappNumber: job.whatsapp_number || updatedData.whatsappNumber || j.whatsappNumber,
                 whatsappMessage: updatedData.whatsappMessage || j.whatsappMessage,
                 classified_heading: job.classified_heading,
                 salary_min: job.salary_min,
@@ -560,9 +577,20 @@ export const JobProvider = ({ children }) => {
               : j
           )
         );
+      } else {
+        const errStatus = response.status;
+        let errMsg = 'Failed to update job posting.';
+        try {
+          const errData = await response.json();
+          errMsg = extractErrorMessage(errData) || errMsg;
+        } catch (e) {}
+        const error = new Error(errMsg);
+        error.status = errStatus;
+        throw error;
       }
     } catch (err) {
       console.error('Error updating job via API:', err);
+      throw err;
     }
   };
 
@@ -1009,7 +1037,11 @@ export const JobProvider = ({ children }) => {
 
   // Helper getters
   const getEmployerJobs = (companyName = employerProfile.companyName) => {
-    return jobs.filter((j) => j.company.toLowerCase() === companyName.toLowerCase());
+    return jobs.filter((j) => {
+      const matchEmployerId = employerProfile.id && j.employerId && String(j.employerId) === String(employerProfile.id);
+      const matchCompany = companyName && j.company && j.company.toLowerCase().trim() === companyName.toLowerCase().trim();
+      return matchEmployerId || matchCompany;
+    });
   };
 
   const getAnalytics = (companyName = employerProfile.companyName) => {

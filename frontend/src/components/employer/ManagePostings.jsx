@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useJobs } from '../../context/JobContext';
 import { 
-  Briefcase, MapPin, DollarSign, Flame, Zap, Edit, Trash2, 
+  Briefcase, MapPin, DollarSign, IndianRupee, Flame, Zap, Edit, Trash2, 
   Play, Pause, Plus, Search, CheckCircle2, AlertTriangle, X, Eye, XCircle, Calendar,
   ChevronLeft, ChevronRight, Star, Monitor
 } from 'lucide-react';
@@ -451,7 +451,7 @@ const ManagePostings = ({ onEditJob, onCreateNew }) => {
     
     const matchesStatus = statusFilter === 'All' 
       ? true // Show all jobs in the 'All' tab to match the reference image total and math
-      : job.status === statusFilter;
+      : (job.status && job.status.toLowerCase() === statusFilter.toLowerCase());
       
     return matchesSearch && matchesStatus;
   });
@@ -702,7 +702,7 @@ const ManagePostings = ({ onEditJob, onCreateNew }) => {
                         <span>{job.type}</span>
                       </span>
                       <span style={styles.metaItem}>
-                        <DollarSign size={15} style={{ color: '#64748B' }} />
+                        <IndianRupee size={15} style={{ color: '#64748B' }} />
                         <span style={styles.metaItemValue}>{job.salary}</span>
                       </span>
                     </div>

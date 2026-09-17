@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useJobs } from '../../context/JobContext';
 import BuyCreditsModal from './BuyCreditsModal';
 import { 
-  Briefcase, MapPin, DollarSign, Tag, Sparkles, 
+  Briefcase, MapPin, DollarSign, IndianRupee, Tag, Sparkles, 
   Check, Eye, ArrowLeft, Building2, Flame, Zap, Phone, AlertCircle,
   Send, Star, Bell
 } from 'lucide-react';
@@ -614,6 +614,16 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
       }
     }
 
+    // Salary min/max validation
+    if (formData.salary_min && formData.salary_max) {
+      const minSal = Number(formData.salary_min);
+      const maxSal = Number(formData.salary_max);
+      if (!isNaN(minSal) && !isNaN(maxSal) && maxSal < minSal) {
+        setErrorBanner('Maximum salary must be greater than or equal to minimum salary.');
+        return;
+      }
+    }
+
     const descWords = formData.description.trim() === '' ? 0 : formData.description.trim().split(/\s+/).length;
     if (descWords > 50) {
       setErrorBanner('Job description cannot exceed 50 words.');
@@ -933,7 +943,7 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
                   {formData.type || 'Full-time'}
                 </span>
                 <span style={{ ...s.previewMetaItem, fontWeight: 700, color: '#1e293b' }}>
-                  <DollarSign size={13} style={{ color: '#22c55e' }} />
+                  <IndianRupee size={13} style={{ color: '#22c55e' }} />
                   {getSalaryPreview()}
                 </span>
               </div>

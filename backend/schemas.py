@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from typing import Optional
 from models import RoleEnum
 from datetime import datetime
@@ -409,6 +409,7 @@ class JobPostingCreate(BaseModel):
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     salary_period: Optional[str] = "year"
+    whatsapp_number: Optional[str] = None
 
     @field_validator('company')
     @classmethod
@@ -419,6 +420,13 @@ class JobPostingCreate(BaseModel):
     @classmethod
     def check_location(cls, v):
         return validate_city_name(v)
+
+    @model_validator(mode='after')
+    def check_salary_range(self):
+        if self.salary_min is not None and self.salary_max is not None:
+            if self.salary_max < self.salary_min:
+                raise ValueError("Maximum salary must be greater than or equal to minimum salary.")
+        return self
 
 class JobPostingResponse(BaseModel):
     id: str
