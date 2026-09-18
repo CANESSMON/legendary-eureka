@@ -142,10 +142,12 @@ const CompanyProfile = () => {
       errors.whatsappNumber = 'Please enter a valid phone number';
     } else if (/<[^>]+>|<script/i.test(phoneVal)) {
       errors.whatsappNumber = 'Please enter a valid phone number';
+    } else if (!/^\+?[0-9\s\-\(\)]+$/.test(phoneVal)) {
+      errors.whatsappNumber = 'Please enter a valid phone number without special characters';
     } else {
-      const cleanPhone = phoneVal.replace(/[\s\-\(\)]/g, '');
-      if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
-        errors.whatsappNumber = 'Please enter a valid phone number';
+      const cleanPhone = phoneVal.replace(/\D/g, '');
+      if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+        errors.whatsappNumber = 'Please enter a valid phone number (10 to 15 digits)';
       }
     }
 

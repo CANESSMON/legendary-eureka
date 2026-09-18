@@ -1,27 +1,178 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Briefcase, ArrowRight, ArrowLeft, Eye, EyeOff, Check, X } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useJobs } from '../context/JobContext';
 import { API_BASE_URL } from '../config';
 
 const parseErrorMessage = (detail, defaultMsg = 'An error occurred') => {
   if (!detail) return defaultMsg;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) {
-    return detail
+  let msgStr = '';
+  if (typeof detail === 'string') {
+    msgStr = detail;
+  } else if (Array.isArray(detail)) {
+    msgStr = detail
       .map((err) => {
         if (typeof err === 'string') return err;
         if (err.msg) return err.msg;
         return JSON.stringify(err);
       })
       .join(', ');
+  } else if (typeof detail === 'object') {
+    if (detail.msg) msgStr = detail.msg;
+    else if (detail.message) msgStr = detail.message;
+    else msgStr = JSON.stringify(detail);
+  } else {
+    msgStr = String(detail);
   }
-  if (typeof detail === 'object') {
-    if (detail.msg) return detail.msg;
-    if (detail.message) return detail.message;
-    return JSON.stringify(detail);
+  return msgStr.replace(/^Value error,\s*/i, '');
+};
+
+const WEAK_PASSWORDS_SET = new Set([
+  '12345678', '123456789', '1234567890', '87654321', '12341234', '11111111', '00000000',
+  'password', 'password1', 'password123', 'pass1234', 'p@ssword', 'p@ssword1',
+  'qwerty123', 'qwerty1234', 'qwerty12', 'qwertyuiop', 'qwert123',
+  'admin123', 'admin1234', 'administrator', 'adminpass',
+  'welcome1', 'welcome123', 'welcome2023', 'welcome2024', 'welcome2025', 'welcome2026',
+  'letmein123', 'abc12345', 'abcd1234', 'abc123456', 'abcdefgh',
+  'iloveyou1', 'monkey123', 'dragon123', 'master123', 'login123',
+  'princess1', 'football1', 'charlie1', 'shadow123', 'sunshine1', 'superman1',
+  'user1234', 'guest1234', 'change123', 'testing123', 'test1234'
+]);
+
+const checkPasswordRules = (pw) => {
+  if (!pw) {
+    return {
+      hasLength: false,
+      hasLowercase: false,
+      hasUppercase: false,
+      hasNumber: false,
+      hasSpecial: false,
+      isNotCommon: true,
+      hasNoEdgeSpaces: true,
+      isValid: false,
+      score: 0
+    };
   }
-  return String(detail);
+
+  const hasNoEdgeSpaces = !pw.startsWith(' ') && !pw.endsWith(' ');
+  const lower = pw.toLowerCase();
+
+  const hasLength = pw.length >= 8 && pw.length <= 64;
+  const hasLowercase = /[a-z]/.test(pw);
+  const hasUppercase = /[A-Z]/.test(pw);
+  const hasNumber = /[0-9]/.test(pw);
+  const hasSpecial = /[^a-zA-Z0-9\s]/.test(pw);
+
+  let isNotCommon = true;
+  if (WEAK_PASSWORDS_SET.has(lower.trim())) {
+    isNotCommon = false;
+  } else if (new Set(lower.trim()).size === 1 && lower.trim().length >= 1) {
+    isNotCommon = false;
+  } else {
+    const commonBases = ['password', 'p@ssword', 'admin', 'welcome', 'qwerty', 'abc123', 'login', 'letmein', 'pass', 'user', 'guest'];
+    for (const base of commonBases) {
+      if (lower.trim().startsWith(base)) {
+        const rest = lower.trim().slice(base.length);
+        if (/^[\d!@#$%^&*()_+\-=\[\]{};:\'",.<>?]*$/.test(rest)) {
+          isNotCommon = false;
+          break;
+        }
+      }
+    }
+  }
+
+  const isValid = hasNoEdgeSpaces && hasLength && hasLowercase && hasUppercase && hasNumber && hasSpecial && isNotCommon;
+
+  let score = 0;
+  if (hasLength) score++;
+  if (hasLowercase) score++;
+  if (hasUppercase) score++;
+  if (hasNumber) score++;
+  if (hasSpecial) score++;
+  if (hasNoEdgeSpaces) score++;
+  if (isNotCommon && pw.length >= 8) score++;
+
+  return { hasLength, hasLowercase, hasUppercase, hasNumber, hasSpecial, isNotCommon, hasNoEdgeSpaces, isValid, score };
+};
+
+const PasswordValidationCriteria = ({ rules, password = '' }) => {
+  if (!password) return null;
+
+  const criteria = [
+    { label: '8-64 characters long', met: rules.hasLength },
+    { label: '1 lowercase letter (a-z)', met: rules.hasLowercase },
+    { label: '1 uppercase letter (A-Z)', met: rules.hasUppercase },
+    { label: '1 number (0-9)', met: rules.hasNumber },
+    { label: '1 symbol (!@#$...)', met: rules.hasSpecial },
+    { label: 'No leading/trailing space', met: rules.hasNoEdgeSpaces },
+  ];
+
+  return (
+    <div className="mt-2.5 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-2.5 animate-fade-in text-left">
+      {!rules.hasNoEdgeSpaces && (
+        <div className="flex items-center gap-1.5 text-red-600 font-semibold bg-red-50 p-2 rounded border border-red-200">
+          <X size={14} className="shrink-0 stroke-[2.5]" />
+          <span>Password must not contain leading or trailing spaces.</span>
+        </div>
+      )}
+
+      {!rules.isNotCommon && rules.hasNoEdgeSpaces && (
+        <div className="flex items-center gap-1.5 text-red-600 font-semibold bg-red-50 p-2 rounded border border-red-200">
+          <X size={14} className="shrink-0 stroke-[2.5]" />
+          <span>This password is too common. Please choose a stronger password.</span>
+        </div>
+      )}
+
+      {/* Strength Bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center text-[11px] font-medium text-slate-500">
+          <span>Password strength</span>
+          <span className={rules.isValid ? "text-emerald-600 font-bold" : (!rules.isNotCommon || !rules.hasNoEdgeSpaces) ? "text-red-500 font-bold" : "text-slate-500"}>
+            {!rules.hasNoEdgeSpaces ? "Invalid Space" : !rules.isNotCommon ? "Too Weak" : rules.isValid ? "Strong" : rules.score >= 4 ? "Moderate" : "Weak"}
+          </span>
+        </div>
+        <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden flex">
+          <div
+            className={`h-full transition-all duration-300 ${
+              !rules.hasNoEdgeSpaces || !rules.isNotCommon
+                ? "bg-red-500 w-1/4"
+                : rules.isValid
+                ? "bg-emerald-500 w-full"
+                : rules.score >= 4
+                ? "bg-amber-400 w-2/3"
+                : "bg-red-400 w-1/3"
+            }`}
+          />
+        </div>
+      </div>
+
+      {/* Rules list */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
+        {criteria.map((item, idx) => (
+          <div key={idx} className="flex items-center gap-1.5 text-slate-600">
+            {item.met ? (
+              <Check size={13} className="text-emerald-600 shrink-0 stroke-[3]" />
+            ) : (
+              <span className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0 inline-block" />
+            )}
+            <span className={item.met ? "text-slate-800 font-medium" : "text-slate-400"}>
+              {item.label}
+            </span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5 text-slate-600">
+          {rules.isNotCommon ? (
+            <Check size={13} className={password ? "text-emerald-600 shrink-0 stroke-[3]" : "opacity-0"} />
+          ) : (
+            <X size={13} className="text-red-600 shrink-0 stroke-[3]" />
+          )}
+          <span className={!rules.isNotCommon ? "text-red-600 font-medium" : password && rules.isNotCommon ? "text-slate-800 font-medium" : "text-slate-400"}>
+            Not a common password
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const Auth = ({ initialMode }) => {
@@ -50,6 +201,7 @@ const Auth = ({ initialMode }) => {
   const [resetStep, setResetStep] = useState(1); // 1: Send Code, 2: Verify Code, 3: Set New Password
 
   const [fullName, setFullName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -63,6 +215,9 @@ const Auth = ({ initialMode }) => {
   const [successMsg, setSuccessMsg] = useState('');
   const [otpRequired, setOtpRequired] = useState(false);
   const [otp, setOtp] = useState('');
+
+  const passwordRules = checkPasswordRules(password);
+  const newPasswordRules = checkPasswordRules(newPassword);
 
   const getTitle = () => {
     if (isForgotPassword) {
@@ -96,6 +251,7 @@ const Auth = ({ initialMode }) => {
     setOtpRequired(false);
     setOtp('');
     setNewPassword('');
+    setCompanyName('');
     navigate(newLoginMode ? '/login' : '/register', { replace: true });
   };
 
@@ -103,10 +259,31 @@ const Auth = ({ initialMode }) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    // Pre-validate password on registration or reset
+    if (!isLogin && !isForgotPassword && !passwordRules.isValid) {
+      if (!passwordRules.isNotCommon) {
+        setErrorMsg('This password is too common. Please choose a stronger password.');
+      } else {
+        setErrorMsg('Please ensure your password meets all requirements.');
+      }
+      return;
+    }
+
+    if (isForgotPassword && resetStep === 3 && !newPasswordRules.isValid) {
+      if (!newPasswordRules.isNotCommon) {
+        setErrorMsg('This password is too common. Please choose a stronger password.');
+      } else {
+        setErrorMsg('Please ensure your password meets all requirements.');
+      }
+      return;
+    }
+
     setLoading(true);
 
     const trimmedEmail = email.trim();
     const trimmedFullName = fullName.trim();
+    const trimmedCompanyName = companyName.trim();
     const trimmedReferral = referralCode.trim();
 
     try {
@@ -120,11 +297,11 @@ const Auth = ({ initialMode }) => {
           const data = await response.json();
 
           if (!response.ok) {
-            throw new Error(parseErrorMessage(data.detail, 'Reset failed'));
+            throw new Error(parseErrorMessage(data.detail, 'No account found with this email address'));
           }
 
           setResetStep(2);
-          setSuccessMsg('');
+          setSuccessMsg(data.message || 'Password reset code sent to your email address.');
         } else if (resetStep === 2) {
           if (!otp || otp.trim().length !== 6) {
             throw new Error('Please enter the 6-digit reset code');
@@ -148,10 +325,6 @@ const Auth = ({ initialMode }) => {
           setErrorMsg('');
           setSuccessMsg('');
         } else if (resetStep === 3) {
-          if (!newPassword || newPassword.trim().length < 8) {
-            throw new Error('Password must be at least 8 characters long');
-          }
-
           const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -218,6 +391,7 @@ const Auth = ({ initialMode }) => {
           password,
           full_name: trimmedFullName,
           account_type: accountType,
+          ...(accountType === 'employer' ? { company_name: trimmedCompanyName } : {}),
           ...(accountType === 'employer' && trimmedReferral ? { referral_code: trimmedReferral } : {})
         };
         if (otpRequired) {
@@ -253,6 +427,14 @@ const Auth = ({ initialMode }) => {
       setLoading(false);
     }
   };
+
+  const isSubmitDisabled = loading || (
+    !isLogin && !isForgotPassword && !otpRequired
+      ? (!passwordRules.isValid || !fullName.trim() || !email.trim() || (accountType === 'employer' && !companyName.trim()))
+      : isForgotPassword && resetStep === 3
+      ? !newPasswordRules.isValid
+      : false
+  );
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
@@ -420,7 +602,6 @@ const Auth = ({ initialMode }) => {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       required
-                      minLength={8}
                       placeholder="At least 8 characters"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 pl-4 pr-11 text-sm text-slate-900 outline-none focus:border-primary focus:bg-white transition-colors"
                     />
@@ -433,6 +614,7 @@ const Auth = ({ initialMode }) => {
                       {showPassword ? <Eye size={16} /> : <EyeOff size={16} />}
                     </button>
                   </div>
+                  <PasswordValidationCriteria rules={newPasswordRules} password={newPassword} />
                 </div>
               </div>
             ) : (
@@ -471,6 +653,21 @@ const Auth = ({ initialMode }) => {
                   </div>
                 )}
 
+                {/* Company Name - Only for Employer on Sign Up */}
+                {!isLogin && !isForgotPassword && accountType === 'employer' && (
+                  <div className="animate-fade-in [animation-delay:35ms]">
+                    <label className="form-label tracking-wider mb-2 block text-slate-500">Company Name</label>
+                    <input
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      required
+                      placeholder="e.g. Acme Tech Solutions"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-sm text-slate-900 outline-none focus:border-primary focus:bg-white transition-colors"
+                    />
+                  </div>
+                )}
+
                 {/* Email - Always visible */}
                 <div className="animate-fade-in [animation-delay:50ms]">
                   <label className="form-label tracking-wider mb-2 block text-slate-500">Email Address</label>
@@ -506,6 +703,11 @@ const Auth = ({ initialMode }) => {
                         {showPassword ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                     </div>
+
+                    {/* Real-time inline password criteria checklist (Only during Sign Up) */}
+                    {!isLogin && (
+                      <PasswordValidationCriteria rules={passwordRules} password={password} />
+                    )}
                   </div>
                 )}
 
@@ -542,7 +744,11 @@ const Auth = ({ initialMode }) => {
 
             {/* Submit Button */}
             <div className="pt-2 animate-fade-in [animation-delay:200ms]">
-              <button disabled={loading} type="submit" className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-3 rounded-lg transition-all font-bold tracking-wide shadow-sm shadow-primary/20 flex items-center justify-center gap-2 hover:-translate-y-0.5">
+              <button
+                disabled={isSubmitDisabled}
+                type="submit"
+                className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg transition-all font-bold tracking-wide shadow-sm shadow-primary/20 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+              >
                 {loading
                   ? 'Processing...'
                   : otpRequired

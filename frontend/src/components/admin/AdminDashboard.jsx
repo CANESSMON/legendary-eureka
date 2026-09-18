@@ -45,6 +45,12 @@ export default function AdminDashboard() {
   const [suspendReason, setSuspendReason] = useState('');
   const [jobToSuspend, setJobToSuspend] = useState(null);
 
+  // Employer suspension confirmation states
+  const [showEmployerSuspendModal, setShowEmployerSuspendModal] = useState(false);
+  const [employerSuspendReason, setEmployerSuspendReason] = useState('');
+  const [employerToSuspend, setEmployerToSuspend] = useState(null);
+  const [employerSuspendLoading, setEmployerSuspendLoading] = useState(false);
+
   // Plan editing states
   const [selectedEditPlan, setSelectedEditPlan] = useState(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
@@ -86,6 +92,14 @@ export default function AdminDashboard() {
   };
 
   const handleSubChange = async (id, plan, status) => {
+    // Intercept subscription status change to 'Suspended' — require confirmation
+    if (status === 'Suspended') {
+      const emp = employers.find(e => e.id === id);
+      setEmployerToSuspend({ id, plan, currentStatus: emp?.subscription_status, companyName: emp?.company_name || 'this employer' });
+      setEmployerSuspendReason('');
+      setShowEmployerSuspendModal(true);
+      return;
+    }
     await updateEmployerSubscription(id, plan, status);
     fetchAdminEmployers().then(setEmployers).then((updatedEmployers) => {
       if (selectedEmployer && selectedEmployer.id === id) {
@@ -93,6 +107,30 @@ export default function AdminDashboard() {
         if (found) setSelectedEmployer(found);
       }
     });
+  };
+
+  const handleConfirmEmployerSuspend = async () => {
+    if (!employerSuspendReason.trim()) {
+      alert('Please provide a reason for suspension.');
+      return;
+    }
+    setEmployerSuspendLoading(true);
+    try {
+      await updateEmployerSubscription(employerToSuspend.id, employerToSuspend.plan, 'Suspended');
+      fetchAdminEmployers().then(setEmployers).then((updatedEmployers) => {
+        if (selectedEmployer && selectedEmployer.id === employerToSuspend.id) {
+          const found = updatedEmployers.find(e => e.id === employerToSuspend.id);
+          if (found) setSelectedEmployer(found);
+        }
+      });
+      setShowEmployerSuspendModal(false);
+      setEmployerToSuspend(null);
+      setEmployerSuspendReason('');
+    } catch (err) {
+      console.error('Error suspending employer:', err);
+    } finally {
+      setEmployerSuspendLoading(false);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -1642,6 +1680,98 @@ export default function AdminDashboard() {
               >
                 Confirm Suspension
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Employer Suspension Warning & Confirmation Modal */}
+      {showEmployerSuspendModal && employerToSuspend && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs px-4 animate-fade-in">
+          <div className="bg-white max-w-lg w-full rounded-2xl border border-rose-200 shadow-2xl p-0 overflow-hidden">
+            {/* Warning Header */}
+            <div style={{ background: 'linear-gradient(135deg, #fef2f2, #fff1f2, #ffe4e6)' }} className="px-6 py-4 border-b border-rose-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="text-rose-600" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-rose-900 m-0">⚠️ Suspend Employer Account</h3>
+                  <p className="text-[11px] text-rose-600 font-medium m-0 mt-0.5">This is a critical action that requires confirmation</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowEmployerSuspendModal(false); setEmployerToSuspend(null); }}
+                  className="ml-auto text-rose-400 hover:text-rose-600 cursor-pointer bg-transparent border-0"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {/* Employer identity */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                  <Building2 size={16} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 m-0">{employerToSuspend.companyName}</p>
+                  <p className="text-[10px] text-slate-500 font-medium m-0">Current Status: <span className="text-emerald-600 font-bold">{employerToSuspend.currentStatus || 'Active'}</span> → <span className="text-rose-600 font-bold">Suspended</span></p>
+                </div>
+              </div>
+
+              {/* Consequences warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                <p className="text-[11px] font-bold text-amber-800 m-0 flex items-center gap-1.5">
+                  <Shield size={13} className="text-amber-600" />
+                  Consequences of Suspension
+                </p>
+                <ul className="m-0 pl-4 space-y-1">
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">All active job postings by this employer will become hidden from candidates.</li>
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">The employer will lose access to their dashboard and posting features.</li>
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">Subscription plan will be downgraded to <strong>Free</strong> automatically.</li>
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">This action is logged and auditable by all administrators.</li>
+                </ul>
+              </div>
+
+              {/* Reason textarea */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Reason for Suspension <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={employerSuspendReason}
+                  onChange={(e) => setEmployerSuspendReason(e.target.value)}
+                  placeholder="e.g. Violation of terms of service, fraudulent job postings, non-payment of subscription fees..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-xs font-medium text-slate-900 resize-none"
+                ></textarea>
+                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                  This reason will be recorded in the activity log and may be shared with the employer.
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-3 pt-1 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setShowEmployerSuspendModal(false); setEmployerToSuspend(null); }}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition-all shadow-2xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={employerSuspendLoading || !employerSuspendReason.trim()}
+                  onClick={handleConfirmEmployerSuspend}
+                  className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 border-0 rounded-xl cursor-pointer transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <AlertTriangle size={13} />
+                  {employerSuspendLoading ? 'Suspending...' : 'Confirm Suspension'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

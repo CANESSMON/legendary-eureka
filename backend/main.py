@@ -109,6 +109,7 @@ finally:
 
 from config import CORS_ORIGINS, SECRET_KEY, ALGORITHM, ENABLE_DOCS
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi import Request
 
@@ -118,6 +119,20 @@ app = FastAPI(
     redoc_url="/redoc" if ENABLE_DOCS else None,
     openapi_url="/openapi.json" if ENABLE_DOCS else None
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    messages = []
+    for err in errors:
+        msg = err.get("msg", "")
+        if msg.startswith("Value error, "):
+            msg = msg[len("Value error, "):]
+        messages.append(msg)
+    return JSONResponse(
+        status_code=400,
+        content={"detail": ", ".join(messages)}
+    )
 
 @app.exception_handler(StarletteHTTPException)
 async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
@@ -389,6 +404,10 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     if role == models.RoleEnum.EMPLOYER:
+        company_name_val = (user.company_name or "").strip()
+        if not company_name_val:
+            raise HTTPException(status_code=400, detail="Company Name is required for employer registration")
+
         agent = None
         if user.referral_code:
             agent = db.query(models.AgentProfile).filter(models.AgentProfile.referral_code == user.referral_code).first()
@@ -397,7 +416,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         
         employer = models.EmployerProfile(
             user_id=new_user.id,
-            company_name=user.company_name or user.full_name,
+            company_name=company_name_val,
             industry=user.industry or "Information Technology",
             city=user.city or "Bangalore",
             whatsapp_number=user.whatsapp_number or "+919876543210",
@@ -556,46 +575,46 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/forgot-password")
 def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
-    """Send a password reset OTP to the user's email if the account exists.
-    Always returns a generic success message to prevent account enumeration."""
+    """Send a password reset OTP to the user's email if the account exists."""
     email_lower = request.email.lower().strip()
     db_user = db.query(models.User).filter(models.User.email == email_lower).first()
     
-    if db_user:
-        # Generate and save reset OTP
-        otp_code = f"{random.randint(100000, 999999)}"
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
-        
-        # Clear older OTPs for this email with reset purpose
-        db.query(models.OTPVerification).filter(
-            models.OTPVerification.email == email_lower,
-            models.OTPVerification.purpose == "password_reset"
-        ).delete()
-        
-        db_otp = models.OTPVerification(
-            email=email_lower,
-            otp_code=otp_code,
-            purpose="password_reset",
-            expires_at=expires_at
-        )
-        db.add(db_otp)
-        db.commit()
-        
-        # Send email via SMTP
-        from email_utils import send_reset_password_email
-        send_reset_password_email(email_lower, otp_code)
-        
-        log_activity(
-            db=db,
-            action="password_reset_requested",
-            details=f"Password reset OTP sent to: '{email_lower}'",
-            user=db_user,
-            entity_type="user",
-            entity_id=db_user.id
-        )
+    if not db_user:
+        raise HTTPException(status_code=400, detail="No account found with this email address. Please check your email or create an account.")
     
-    # Always return generic message to prevent account enumeration
-    return {"message": "If an account exists with this email address, a password reset code has been sent."}
+    # Generate and save reset OTP
+    otp_code = f"{random.randint(100000, 999999)}"
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    
+    # Clear older OTPs for this email with reset purpose
+    db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == email_lower,
+        models.OTPVerification.purpose == "password_reset"
+    ).delete()
+    
+    db_otp = models.OTPVerification(
+        email=email_lower,
+        otp_code=otp_code,
+        purpose="password_reset",
+        expires_at=expires_at
+    )
+    db.add(db_otp)
+    db.commit()
+    
+    # Send email via SMTP
+    from email_utils import send_reset_password_email
+    send_reset_password_email(email_lower, otp_code)
+    
+    log_activity(
+        db=db,
+        action="password_reset_requested",
+        details=f"Password reset OTP sent to: '{email_lower}'",
+        user=db_user,
+        entity_type="user",
+        entity_id=db_user.id
+    )
+    
+    return {"message": "Password reset code sent to your email address."}
 
 
 class VerifyResetOTPRequest(schemas.BaseModel):
@@ -631,10 +650,10 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     
     # Validate new password
     new_pw = request.new_password.strip()
-    if len(new_pw) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
-    if len(new_pw) > 128:
-        raise HTTPException(status_code=400, detail="Password must not exceed 128 characters")
+    try:
+        schemas.validate_password(new_pw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     # Verify OTP
     db_otp = db.query(models.OTPVerification).filter(

@@ -607,9 +607,13 @@ const JobPostForm = ({ initialJob = null, onCancel, onSuccess }) => {
         setErrorBanner('Please enter a valid phone number');
         return;
       }
-      const cleanPhone = phoneVal.replace(/[\s\-\(\)]/g, '');
-      if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
-        setErrorBanner('Please enter a valid phone number');
+      if (!/^\+?[0-9\s\-\(\)]+$/.test(phoneVal)) {
+        setErrorBanner('Please enter a valid phone number without special characters');
+        return;
+      }
+      const cleanPhone = phoneVal.replace(/\D/g, '');
+      if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+        setErrorBanner('Please enter a valid phone number (10 to 15 digits)');
         return;
       }
     }

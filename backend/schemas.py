@@ -4,23 +4,62 @@ from models import RoleEnum
 from datetime import datetime
 import re
 
-# Weak password blocklist (common passwords that meet length requirements)
+# Weak password blocklist (common passwords and predictable patterns)
 WEAK_PASSWORDS = {
-    '12345678', '123456789', '1234567890', 'password', 'password1',
-    'qwerty123', 'admin123', 'welcome1', 'welcome123', 'letmein123',
-    'abc12345', 'abcd1234', 'iloveyou1', 'monkey123', 'dragon123',
-    'master123', 'qwerty12', 'login123', 'princess1', 'football1',
+    '12345678', '123456789', '1234567890', '87654321', '12341234', '11111111', '00000000',
+    'password', 'password1', 'password123', 'pass1234', 'p@ssword', 'p@ssword1',
+    'qwerty123', 'qwerty1234', 'qwerty12', 'qwertyuiop', 'qwert123',
+    'admin123', 'admin1234', 'administrator', 'adminpass',
+    'welcome1', 'welcome123', 'welcome2023', 'welcome2024', 'welcome2025', 'welcome2026',
+    'letmein123', 'abc12345', 'abcd1234', 'abc123456', 'abcdefgh',
+    'iloveyou1', 'monkey123', 'dragon123', 'master123', 'login123',
+    'princess1', 'football1', 'charlie1', 'shadow123', 'sunshine1', 'superman1',
+    'user1234', 'guest1234', 'change123', 'testing123', 'test1234'
 }
 
+def is_weak_pattern(v: str) -> bool:
+    v_lower = v.lower()
+    # Repeated single character: "11111111", "aaaaaaaa"
+    if len(set(v_lower)) == 1:
+        return True
+    # Common base words + simple trailing numbers/symbols (e.g. "password123", "password123!", "p@ssword1")
+    common_bases = ['password', 'p@ssword', 'admin', 'welcome', 'qwerty', 'abc123', 'login', 'letmein', 'pass', 'user', 'guest']
+    for base in common_bases:
+        if v_lower.startswith(base):
+            rest = v_lower[len(base):]
+            if re.match(r'^[\d!@#$%^&*()_+\-=\[\]{};:\'",.<>?]*$', rest):
+                return True
+    return False
+
+def validate_password(v: str) -> str:
+    if v.startswith(' ') or v.endswith(' '):
+        raise ValueError('Password must not contain leading or trailing spaces')
+    if len(v) < 8 or len(v) > 64:
+        raise ValueError('Password must be between 8 and 64 characters long')
+    # Check weak / common passwords BEFORE character composition checks
+    if v.lower() in WEAK_PASSWORDS or is_weak_pattern(v):
+        raise ValueError('This password is too common. Please choose a stronger password')
+    if not re.search(r'[a-z]', v):
+        raise ValueError('Password must contain at least one lowercase letter')
+    if not re.search(r'[A-Z]', v):
+        raise ValueError('Password must contain at least one uppercase letter')
+    if not re.search(r'[0-9]', v):
+        raise ValueError('Password must contain at least one number')
+    if not re.search(r'[^a-zA-Z0-9\s]', v):
+        raise ValueError('Password must contain at least one special character (!@#$%^&*)')
+    return v
+
 def validate_full_name(v: str) -> str:
+    if v is None or v.strip() == '':
+        raise ValueError('Full name is required')
     v = v.strip()
     if len(v) < 2:
         raise ValueError('Full name must be at least 2 characters long')
     if len(v) > 100:
         raise ValueError('Full name must not exceed 100 characters')
-    # Block HTML tags
-    if re.search(r'<[^>]+>', v):
-        raise ValueError('Full name must not contain HTML tags')
+    # Block HTML / script tags / event handlers / javascript URLs
+    if re.search(r'<[^>]+>', v) or re.search(r'<\s*script', v, re.IGNORECASE) or re.search(r'javascript:', v, re.IGNORECASE) or re.search(r'on\w+\s*=', v, re.IGNORECASE):
+        raise ValueError('Full name must not contain HTML or script tags')
     # Block SQL injection patterns
     sql_patterns = [
         r"('\s*(OR|AND|DROP|SELECT|INSERT|UPDATE|DELETE|UNION|--|;))",
@@ -31,7 +70,7 @@ def validate_full_name(v: str) -> str:
             raise ValueError('Full name contains invalid characters')
     # Allow only letters (ASCII and common accented), spaces, hyphens, apostrophes, periods
     if not re.match(r"^[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú\s\-'.]+$", v):
-        raise ValueError('Full name must contain only letters, spaces, hyphens, apostrophes, or periods')
+        raise ValueError('Full name must contain only valid name characters (letters and spaces)')
     # Block emoji range
     emoji_pattern = re.compile(
         "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF"
@@ -41,21 +80,6 @@ def validate_full_name(v: str) -> str:
     )
     if emoji_pattern.search(v):
         raise ValueError('Full name must not contain emojis')
-    return v
-
-def validate_password(v: str) -> str:
-    # Trim leading/trailing whitespace only
-    v = v.strip()
-    if len(v) < 8:
-        raise ValueError('Password must be at least 8 characters long')
-    if len(v) > 128:
-        raise ValueError('Password must not exceed 128 characters')
-    if not re.search(r'[a-zA-Z]', v):
-        raise ValueError('Password must contain at least one letter')
-    if not re.search(r'[0-9]', v):
-        raise ValueError('Password must contain at least one number')
-    if v.lower() in WEAK_PASSWORDS:
-        raise ValueError('This password is too common. Please choose a stronger password')
     return v
 
 def validate_email_length(v: str) -> str:
@@ -154,11 +178,130 @@ def validate_phone_number(v: Optional[str]) -> Optional[str]:
     if v is None or v.strip() == '':
         return None
     v = v.strip()
-    if re.search(r'<[^>]+>', v) or re.search(r'<script', v, re.IGNORECASE):
+    if re.search(r'<[^>]+>', v) or re.search(r'<\s*script', v, re.IGNORECASE) or re.search(r'javascript:', v, re.IGNORECASE):
         raise ValueError('Phone number must not contain HTML or script tags')
-    clean = re.sub(r'[\s\-\(\)]', '', v)
-    if not re.match(r'^\+?[0-9]{7,15}$', clean):
-        raise ValueError('Please enter a valid phone number (e.g. +919876543210)')
+    if not re.match(r'^\+?[0-9\s\-\(\)]+$', v):
+        raise ValueError('Please enter a valid phone number without unsupported special characters')
+    digits_only = re.sub(r'\D', '', v)
+    if len(digits_only) < 10:
+        raise ValueError('Phone number must contain at least 10 digits')
+    if len(digits_only) > 15:
+        raise ValueError('Phone number must not exceed 15 digits')
+    return v
+
+def validate_bank_account_number(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    # Reject SQL injection / quotes / special chars / HTML tags
+    if re.search(r"['\";\-\-/<>]", v) or re.search(r"(OR|AND|SELECT|DROP|INSERT|DELETE|UNION|UPDATE)", v, re.IGNORECASE):
+        raise ValueError('Please enter a valid bank account number')
+    if not re.match(r'^[0-9\-\s]+$', v):
+        raise ValueError('Please enter a valid bank account number')
+    digits_only = re.sub(r'\D', '', v)
+    if len(digits_only) < 9 or len(digits_only) > 18:
+        raise ValueError('Please enter a valid bank account number (9 to 18 digits)')
+    return v
+
+def validate_account_holder_name(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if len(v) < 2:
+        raise ValueError('Account holder name must be at least 2 characters long')
+    if len(v) > 100:
+        raise ValueError('Account holder name must not exceed 100 characters')
+    if re.search(r'<[^>]+>', v) or re.search(r'<\s*script', v, re.IGNORECASE) or re.search(r'javascript:', v, re.IGNORECASE):
+        raise ValueError('Account holder name must not contain HTML or script tags')
+    if re.search(r'[0-9]', v):
+        raise ValueError('Account holder name must contain only letters and spaces')
+    if not re.match(r"^[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú\s\-'.]+$", v):
+        raise ValueError('Account holder name must contain only letters and spaces')
+    return v
+
+def validate_dob(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    dob_date = None
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+        try:
+            dob_date = datetime.strptime(v, fmt).date()
+            break
+        except ValueError:
+            pass
+    if not dob_date:
+        raise ValueError('Please enter a valid date of birth (YYYY-MM-DD)')
+    
+    today = datetime.now().date()
+    if dob_date >= today:
+        raise ValueError('Date of birth cannot be today or a future date')
+    
+    age = today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
+    if age < 18:
+        raise ValueError('You must be at least 18 years old')
+    if age > 100:
+        raise ValueError('Please enter a valid date of birth')
+    
+    return dob_date.strftime('%Y-%m-%d')
+
+def validate_doc_number(doc_type: Optional[str], doc_number: Optional[str]) -> Optional[str]:
+    if doc_number is None or doc_number.strip() == '':
+        return None
+    doc_num = doc_number.strip()
+    clean_num = doc_num.replace(' ', '').replace('-', '')
+    doc_t = (doc_type or 'Aadhar').strip()
+
+    if doc_t in ('Aadhar', 'Aadhaar'):
+        if not re.match(r'^[2-9][0-9]{11}$', clean_num):
+            raise ValueError('Please enter a valid 12-digit Aadhaar number (e.g. 987654321012)')
+        if len(set(clean_num)) == 1:
+            raise ValueError('Please enter a valid 12-digit Aadhaar number')
+        return clean_num
+    elif doc_t == 'PAN':
+        upper_num = clean_num.upper()
+        if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$', upper_num):
+            raise ValueError('Please enter a valid 10-character PAN card number (e.g. ABCDE1234F)')
+        return upper_num
+    elif doc_t in ('Voter ID', 'VoterID', 'EPIC'):
+        upper_num = clean_num.upper()
+        if not re.match(r'^[A-Z]{3}[0-9]{7}$', upper_num):
+            raise ValueError('Please enter a valid Voter ID number (e.g. ABC1234567)')
+        return upper_num
+    elif doc_t == 'Passport':
+        upper_num = clean_num.upper()
+        if not re.match(r'^[A-Z][0-9]{7}$', upper_num):
+            raise ValueError('Please enter a valid Passport number (e.g. A1234567)')
+        return upper_num
+
+    return doc_num
+
+def validate_upi_id(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if re.search(r'<[^>]+>', v) or re.search(r'<\s*script', v, re.IGNORECASE) or re.search(r'javascript:', v, re.IGNORECASE):
+        raise ValueError('UPI ID must not contain HTML or script tags')
+    if not re.match(r'^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$', v):
+        raise ValueError('Please enter a valid UPI ID (e.g. username@paytm or user@okhdfcbank)')
+    return v.lower()
+
+def validate_ifsc_code(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip().upper()
+    if not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', v):
+        raise ValueError('Please enter a valid 11-character IFSC code (e.g. SBIN0001234)')
+    return v
+
+def validate_micr_code(v: Optional[str]) -> Optional[str]:
+    if v is None or v.strip() == '':
+        return None
+    v = v.strip()
+    if not re.match(r'^[0-9]{9}$', v):
+        raise ValueError('Please enter a valid 9-digit MICR code (e.g. 400002001)')
+    if len(set(v)) == 1:
+        raise ValueError('Please enter a valid 9-digit MICR code')
     return v
 
 class UserCreate(BaseModel):
@@ -221,11 +364,10 @@ class UserLogin(BaseModel):
     @field_validator('password')
     @classmethod
     def check_password(cls, v):
-        v = v.strip()
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        if len(v) > 128:
-            raise ValueError('Password must not exceed 128 characters')
+        if v.startswith(' ') or v.endswith(' '):
+            raise ValueError('Password must not contain leading or trailing spaces')
+        if len(v) < 8 or len(v) > 64:
+            raise ValueError('Password must be between 8 and 64 characters long')
         return v
 
 
@@ -336,6 +478,47 @@ class AgentProfileUpdate(BaseModel):
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
     micr_code: Optional[str] = None
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone(cls, v):
+        return validate_phone_number(v)
+
+    @field_validator('dob')
+    @classmethod
+    def check_dob(cls, v):
+        return validate_dob(v)
+
+    @field_validator('upi_id')
+    @classmethod
+    def check_upi_id(cls, v):
+        return validate_upi_id(v)
+
+    @field_validator('account_holder')
+    @classmethod
+    def check_account_holder(cls, v):
+        return validate_account_holder_name(v)
+
+    @field_validator('account_number')
+    @classmethod
+    def check_account_number(cls, v):
+        return validate_bank_account_number(v)
+
+    @field_validator('ifsc_code')
+    @classmethod
+    def check_ifsc_code(cls, v):
+        return validate_ifsc_code(v)
+
+    @field_validator('micr_code')
+    @classmethod
+    def check_micr_code(cls, v):
+        return validate_micr_code(v)
+
+    @model_validator(mode='after')
+    def check_document(self):
+        if self.doc_number:
+            self.doc_number = validate_doc_number(self.doc_type, self.doc_number)
+        return self
 
 class UserResponse(BaseModel):
     id: str

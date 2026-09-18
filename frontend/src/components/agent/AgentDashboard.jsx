@@ -201,13 +201,145 @@ const AgentDashboard = () => {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
 
-    // Double check confirmation values to prevent errors
+    // Client-side phone validation
+    const phoneVal = (profileForm.phone || '').trim();
+    if (phoneVal) {
+      if (/<[^>]+>|<script/i.test(phoneVal) || /javascript:/i.test(phoneVal)) {
+        alert('Validation Error: Phone number must not contain HTML or script tags.');
+        return;
+      }
+      if (!/^\+?[0-9\s\-\(\)]+$/.test(phoneVal)) {
+        alert('Validation Error: Phone number contains unsupported special characters.');
+        return;
+      }
+      const digitsOnly = phoneVal.replace(/\D/g, '');
+      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+        alert('Validation Error: Phone number must contain between 10 and 15 digits.');
+        return;
+      }
+    }
+
+    // Client-side DOB validation
+    const dobVal = (profileForm.dob || '').trim();
+    if (dobVal) {
+      const dobDate = new Date(dobVal);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (isNaN(dobDate.getTime())) {
+        alert('Validation Error: Please enter a valid date of birth.');
+        return;
+      }
+      if (dobDate >= today) {
+        alert('Validation Error: Date of birth cannot be today or a future date.');
+        return;
+      }
+      let age = today.getFullYear() - dobDate.getFullYear();
+      const monthDiff = today.getMonth() - dobDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+        age--;
+      }
+      if (age < 18) {
+        alert('Validation Error: You must be at least 18 years old.');
+        return;
+      }
+    }
+
+    // Client-side Document Number validation
+    const docNumVal = (profileForm.docNumber || '').trim();
+    const docTypeVal = profileForm.docType || 'Aadhar';
+    if (docNumVal) {
+      const cleanDoc = docNumVal.replace(/[\s\-]/g, '');
+      if (docTypeVal === 'Aadhar' || docTypeVal === 'Aadhaar') {
+        if (!/^[2-9][0-9]{11}$/.test(cleanDoc)) {
+          alert('Validation Error: Please enter a valid 12-digit Aadhaar number (e.g. 987654321012).');
+          return;
+        }
+      } else if (docTypeVal === 'PAN') {
+        if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanDoc)) {
+          alert('Validation Error: Please enter a valid 10-character PAN card number (e.g. ABCDE1234F).');
+          return;
+        }
+      } else if (docTypeVal === 'Voter ID' || docTypeVal === 'EPIC') {
+        if (!/^[A-Z]{3}[0-9]{7}$/i.test(cleanDoc)) {
+          alert('Validation Error: Please enter a valid Voter ID number (e.g. ABC1234567).');
+          return;
+        }
+      } else if (docTypeVal === 'Passport') {
+        if (!/^[A-Z][0-9]{7}$/i.test(cleanDoc)) {
+          alert('Validation Error: Please enter a valid Passport number (e.g. A1234567).');
+          return;
+        }
+      }
+    }
+
+    // Double check payout details and confirmation values
     if (profileForm.payoutType === 'UPI') {
+      const upiVal = (profileForm.upiId || '').trim();
+      if (upiVal) {
+        if (/<[^>]+>|<script/i.test(upiVal) || /javascript:/i.test(upiVal)) {
+          alert('Validation Error: UPI ID must not contain HTML or script tags.');
+          return;
+        }
+        if (!/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/.test(upiVal)) {
+          alert('Validation Error: Please enter a valid UPI ID (e.g. username@paytm or user@okhdfcbank).');
+          return;
+        }
+      }
       if (profileForm.upiId !== profileForm.confirmUpiId) {
         alert('Validation Error: UPI IDs do not match. Please verify and type again.');
         return;
       }
     } else {
+      // Bank payout validation
+      const holderVal = (profileForm.accountHolder || '').trim();
+      if (holderVal) {
+        if (/<[^>]+>|<script/i.test(holderVal) || /javascript:/i.test(holderVal)) {
+          alert('Validation Error: Account holder name must not contain HTML or script tags.');
+          return;
+        }
+        if (/[0-9]/.test(holderVal)) {
+          alert('Validation Error: Account holder name must contain only letters and spaces.');
+          return;
+        }
+        if (!/^[a-zA-ZÀ-ÖØ-öø-ÿĀ-žА-яÁ-ú\s\-'.]+$/.test(holderVal)) {
+          alert('Validation Error: Account holder name must contain only letters and spaces.');
+          return;
+        }
+      }
+
+      const accNumVal = (profileForm.accountNumber || '').trim();
+      if (accNumVal) {
+        if (/['";\-\-/<>]|OR|AND|SELECT|DROP|INSERT|DELETE|UNION|UPDATE/i.test(accNumVal)) {
+          alert('Validation Error: Please enter a valid bank account number.');
+          return;
+        }
+        if (!/^[0-9\-\s]+$/.test(accNumVal)) {
+          alert('Validation Error: Please enter a valid bank account number.');
+          return;
+        }
+        const accDigits = accNumVal.replace(/\D/g, '');
+        if (accDigits.length < 9 || accDigits.length > 18) {
+          alert('Validation Error: Bank account number must be between 9 and 18 digits.');
+          return;
+        }
+      }
+
+      const ifscVal = (profileForm.ifscCode || '').trim();
+      if (ifscVal) {
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(ifscVal)) {
+          alert('Validation Error: Please enter a valid 11-character IFSC code (e.g. SBIN0001234).');
+          return;
+        }
+      }
+
+      const micrVal = (profileForm.micrCode || '').trim();
+      if (micrVal) {
+        if (!/^[0-9]{9}$/.test(micrVal) || /^(\d)\1{8}$/.test(micrVal)) {
+          alert('Validation Error: Please enter a valid 9-digit MICR code (e.g. 400002001).');
+          return;
+        }
+      }
+
       if (profileForm.accountNumber !== profileForm.confirmAccountNumber) {
         alert('Validation Error: Bank Account Numbers do not match. Please verify and type again.');
         return;
@@ -243,10 +375,12 @@ const AgentDashboard = () => {
         setProfileSuccessMsg('Profile and verified payout details updated successfully!');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        alert('Failed to update agent profile settings');
+        const errData = await response.json();
+        alert(errData.detail || 'Failed to update agent profile settings');
       }
     } catch (err) {
       console.error(err);
+      alert('Network error while updating profile settings');
     } finally {
       setProfileSaving(false);
     }
@@ -593,6 +727,7 @@ const AgentDashboard = () => {
                           type="date"
                           name="dob"
                           value={profileForm.dob}
+                          max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
                           onChange={handleProfileChange}
                           className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs font-medium text-slate-900"
                         />
@@ -805,54 +940,76 @@ const AgentDashboard = () => {
       {/* Suspension Reason Prompt Modal */}
       {suspendingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs px-4">
-          <div className="bg-white max-w-md w-full rounded-2xl border border-slate-200 shadow-2xl p-6 space-y-4 animate-scale-in">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <AlertTriangle className="text-rose-600 animate-pulse" size={18} />
-                Confirm Suspension
-              </h3>
-              <button
-                type="button"
-                onClick={() => setSuspendingId(null)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-0"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSuspend} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Reason for Suspension <span className="text-rose-500">*</span></label>
-                <textarea
-                  required
-                  rows={4}
-                  value={suspensionReason}
-                  onChange={(e) => setSuspensionReason(e.target.value)}
-                  placeholder="e.g. Terms of Service violation, suspicious job postings, or payment delinquency..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-xs font-medium text-slate-900"
-                ></textarea>
-                <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Suspending this employer will restrict their workspace operations. This action is tracked under your affiliate account.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="bg-white max-w-lg w-full rounded-2xl border border-rose-200 shadow-2xl p-0 overflow-hidden animate-scale-in">
+            {/* Warning Header */}
+            <div style={{ background: 'linear-gradient(135deg, #fef2f2, #fff1f2, #ffe4e6)' }} className="px-6 py-4 border-b border-rose-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="text-rose-600 animate-pulse" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-rose-900 m-0">⚠️ Suspend Employer Account</h3>
+                  <p className="text-[11px] text-rose-600 font-medium m-0 mt-0.5">This is a critical action that requires confirmation</p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setSuspendingId(null)}
-                  className="px-4 py-2 text-xs font-bold text-slate-500 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition-all shadow-2xs"
+                  className="ml-auto text-rose-400 hover:text-rose-600 cursor-pointer bg-transparent border-0"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="px-4 py-2 text-xs font-bold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200/85 rounded-xl cursor-pointer transition-all shadow-2xs disabled:opacity-50"
-                >
-                  {actionLoading ? 'Suspending...' : 'Confirm Suspension'}
+                  <X size={18} />
                 </button>
               </div>
-            </form>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {/* Consequences warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                <p className="text-[11px] font-bold text-amber-800 m-0 flex items-center gap-1.5">
+                  <Shield size={13} className="text-amber-600" />
+                  Consequences of Suspension
+                </p>
+                <ul className="m-0 pl-4 space-y-1">
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">The employer's active job postings will become hidden from candidates.</li>
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">The employer will lose access to their dashboard and posting features.</li>
+                  <li className="text-[11px] text-amber-700 font-medium leading-relaxed">This action is tracked under your affiliate account and is auditable.</li>
+                </ul>
+              </div>
+
+              <form onSubmit={handleSuspend} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700">Reason for Suspension <span className="text-rose-500">*</span></label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={suspensionReason}
+                    onChange={(e) => setSuspensionReason(e.target.value)}
+                    placeholder="e.g. Terms of Service violation, suspicious job postings, or payment delinquency..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-xs font-medium text-slate-900 resize-none"
+                  ></textarea>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    This reason will be recorded in the activity log and may be shared with the employer.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setSuspendingId(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition-all shadow-2xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 border-0 rounded-xl cursor-pointer transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <AlertTriangle size={13} />
+                    {actionLoading ? 'Suspending...' : 'Confirm Suspension'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
